@@ -59,10 +59,16 @@ Il colore è sempre accompagnato da un testo esplicito.
 ## Contratto API atteso dal backend
 
 Controller `TanksController` (`api/Tanks/...`), stesso stile di `AxlesController`. Ogni risposta
-è racchiusa nella classe `Response` del backend; il frontend la scarta in
-`core/api/backend-response.ts`. La forma ipotizzata è `{ data: T }`, da allineare.
+è racchiusa nella classe `ServiceBackend.Model.Response`, serializzata in camelCase:
 
-| Metodo | Parametri | Risposta (`data`) |
+```json
+{ "statusCode": 200, "statusMessage": "OK", "listItem": { ... } }
+```
+
+`core/api/backend-response.ts` estrae `listItem` e tratta come errore ogni `statusCode` fuori
+da 200–299 (il controller risponde sempre HTTP 200, l'esito reale è nel corpo).
+
+| Metodo | Parametri | `listItem` |
 |---|---|---|
 | `GET Tanks/GetSystemStatus` | — | `SystemStatus` |
 | `GET Tanks/GetTankHistory` | `code`, `from`, `to` (ISO 8601 UTC) | `TankHistory` |

@@ -10,7 +10,7 @@
 
 .layout {
   display: grid;
-  grid-template-columns: 300px 1fr;
+  grid-template-columns: 380px 1fr;
   gap: 12px;
   margin-bottom: 12px;
 }
@@ -25,10 +25,10 @@
   display: grid;
   grid-template-columns: auto 1fr;
   align-content: start;
-  gap: 4px 10px;
+  gap: 6px 14px;
   margin: 0;
   flex: 1;
-  font-size: 13px;
+  font-size: 17px;
 
   dt {
     color: var(--hmi-text-muted);
@@ -36,12 +36,13 @@
 
   dd {
     margin: 0;
+    font-weight: 700;
     text-align: right;
   }
 
   .big {
-    font-size: 18px;
-    font-weight: 600;
+    font-size: 26px;
+    line-height: 1.1;
   }
 }
 
@@ -60,10 +61,10 @@
 .stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 24px;
-  padding: 6px 12px 10px;
+  gap: 8px 28px;
+  padding: 8px 12px 10px;
   border-top: 1px solid var(--hmi-border);
-  font-size: 13px;
+  font-size: 16px;
   color: var(--hmi-text-muted);
 
   b {

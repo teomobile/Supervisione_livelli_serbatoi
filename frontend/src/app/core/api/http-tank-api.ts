@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { AppConfigService } from '../config/app-config';
 import { AlarmEvent, SystemStatus, TankCode, TankHistory } from '../models/tank.models';
-import { BackendResponse, unwrapResponse } from './backend-response';
+import { BackendResponse, unwrapList, unwrapResponse } from './backend-response';
 import { AlarmQuery, TankApi } from './tank-api';
 
 @Injectable({ providedIn: 'root' })
@@ -38,6 +38,6 @@ export class HttpTankApi extends TankApi {
     if (query.tankCode) params = params.set('code', query.tankCode);
     return this.http
       .get<BackendResponse<AlarmEvent[]>>(`${this.baseUrl}/GetAlarms`, { params })
-      .pipe(unwrapResponse());
+      .pipe(unwrapList());
   }
 }
