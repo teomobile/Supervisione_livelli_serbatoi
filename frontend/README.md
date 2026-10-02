@@ -41,7 +41,7 @@ src/app/
     state/      SystemStatusStore (polling del sinottico)
     time/       periodi predefiniti per trend e storico
   shared/       tank-gauge (serbatoio verticale), level-trend (grafico)
-  features/     overview (sinottico), tank-detail, trends (comparato), alarms, placeholder
+  features/     overview (sinottico), tank-detail, trends (comparato), alarms, settings (configurazione), placeholder
   layout/       shell con barra di stato e menu
 ```
 
@@ -73,6 +73,8 @@ da 200–299 (il controller risponde sempre HTTP 200, l'esito reale è nel corpo
 | `GET Tanks/GetSystemStatus` | — | `SystemStatus` |
 | `GET Tanks/GetTankHistory` | `code`, `from`, `to` (ISO 8601 UTC) | `TankHistory` |
 | `GET Tanks/GetAlarms` | `activeOnly`, `from?`, `to?`, `code?` | `AlarmEvent[]` |
+| `GET Tanks/GetTankConfig` | — | `TankConfig[]` (8 righe) |
+| `POST Tanks/SaveTankConfig` | corpo: `TankConfig[]` solo righe modificate | `TankConfig[]` completo aggiornato |
 
 I tipi sono definiti in `src/app/core/models/tank.models.ts`. Corrispondenza con DB_Gestionale (DB4):
 
@@ -104,3 +106,13 @@ Ogni serbatoio ha un colore fisso (`core/models/tank-colors.ts`), uguale in qual
 di selezione. Palette categorica verificata per il daltonismo sulle coppie adiacenti. Le linee di soglia
 sono grigie per non confondersi con i colori dei serbatoi, e compaiono solo se la soglia è uguale per
 tutti i serbatoi selezionati. Il trend usa `GetTankHistory` una volta per serbatoio, in parallelo.
+
+## Configurazione
+
+Pagina `/configurazione`: nome, capacità, soglia di pieno e quota del troppo pieno per serbatoio, più una
+riga per applicare gli stessi valori a tutti. Le modifiche restano in bozza (campi evidenziati) finché
+non si preme Salva; il salvataggio chiede conferma e, se cambia la soglia di pieno, ricorda di
+cambiarla anche nel PLC. Uscendo dalla pagina con modifiche non salvate compare un avviso.
+
+Lato backend la configurazione va salvata in una tabella SQL (non in `appsettings.json`, che un'API
+non deve riscrivere): `appsettings.json` resta solo per i valori iniziali.

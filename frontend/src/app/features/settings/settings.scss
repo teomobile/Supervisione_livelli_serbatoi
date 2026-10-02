@@ -1,0 +1,117 @@
+.notice {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: #f3efe2;
+  border: 1px solid #c9bd8f;
+  border-left: 5px solid var(--hmi-warning);
+  line-height: 1.45;
+}
+
+.message {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 12px;
+  color: var(--hmi-text-muted);
+}
+
+.bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 16px;
+  padding: 10px 12px;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 12px;
+    color: var(--hmi-text-muted);
+  }
+
+  .hint {
+    font-size: 12px;
+    color: var(--hmi-text-muted);
+  }
+}
+
+.table-panel {
+  margin-top: 12px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+
+  .pending {
+    font-weight: 600;
+  }
+}
+
+.save-error {
+  padding: 8px 12px;
+  background: var(--hmi-alarm);
+  color: var(--hmi-alarm-text);
+  font-weight: 600;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.code {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.name-input {
+  width: 100%;
+  min-width: 180px;
+}
+
+:host ::ng-deep .num-input {
+  width: 110px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+:host ::ng-deep .pct-input {
+  width: 80px;
+}
+
+.pct-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  .liters {
+    min-width: 64px;
+    color: var(--hmi-text-muted);
+    text-align: right;
+  }
+}
+
+/* Riga e campi modificati e non ancora salvati. */
+tr.changed > td.code {
+  box-shadow: inset 4px 0 0 #3a4a57;
+}
+
+:host ::ng-deep .field-changed input,
+.name-input.field-changed {
+  background: #fff8dc;
+}
+
+.error-row td {
+  padding-top: 0;
+  color: var(--hmi-alarm);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.muted {
+  color: var(--hmi-text-muted);
+}

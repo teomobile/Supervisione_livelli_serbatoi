@@ -2,6 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { AppConfigService } from '../config/app-config';
+import { TankConfig } from '../models/tank-config';
 import { AlarmEvent, SystemStatus, TankCode, TankHistory } from '../models/tank.models';
 import { BackendResponse, unwrapList, unwrapResponse } from './backend-response';
 import { AlarmQuery, TankApi } from './tank-api';
@@ -39,5 +40,15 @@ export class HttpTankApi extends TankApi {
     return this.http
       .get<BackendResponse<AlarmEvent[]>>(`${this.baseUrl}/GetAlarms`, { params })
       .pipe(unwrapList());
+  }
+
+  getTankConfig(): Observable<TankConfig[]> {
+    return this.http.get<BackendResponse<TankConfig[]>>(`${this.baseUrl}/GetTankConfig`).pipe(unwrapResponse());
+  }
+
+  saveTankConfig(changes: TankConfig[]): Observable<TankConfig[]> {
+    return this.http
+      .post<BackendResponse<TankConfig[]>>(`${this.baseUrl}/SaveTankConfig`, changes)
+      .pipe(unwrapResponse());
   }
 }

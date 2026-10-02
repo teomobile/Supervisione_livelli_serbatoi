@@ -1,0 +1,172 @@
+<div class="page">
+  <div class="page-title">
+    <h1>Configurazione serbatoi</h1>
+  </div>
+
+  <div class="notice">
+    Le percentuali di <b>pieno</b> e <b>troppo pieno</b> servono solo a disegnare le linee sul supervisore.
+    Il segnale di pieno lo decide il PLC con la soglia scritta nel programma: se la cambi qui, va cambiata anche
+    nel PLC. Il troppo pieno corrisponde alla quota di montaggio del sensore.
+  </div>
+
+  @if (loading()) {
+    <div class="panel message">Caricamento configurazione…</div>
+  } @else if (loadError()) {
+    <div class="panel message">
+      Impossibile leggere la configurazione dal backend.
+      <p-button label="Riprova" size="small" [outlined]="true" (onClick)="load()" />
+    </div>
+  } @else {
+    <section class="panel">
+      <div class="panel-header">
+        <span>Valori per tutti i serbatoi</span>
+      </div>
+      <div class="bulk">
+        <label>
+          <span>Capacità (l)</span>
+          <p-inputnumber
+            [ngModel]="bulk().capacityLiters"
+            (ngModelChange)="setBulk('capacityLiters', $event)"
+            [min]="limits.capacityMin"
+            [max]="limits.capacityMax"
+            locale="it-IT"
+            size="small"
+            inputStyleClass="num-input"
+          />
+        </label>
+        <label>
+          <span>Soglia pieno (%)</span>
+          <p-inputnumber
+            [ngModel]="bulk().fullPercent"
+            (ngModelChange)="setBulk('fullPercent', $event)"
+            [min]="0"
+            [max]="100"
+            [maxFractionDigits]="1"
+            locale="it-IT"
+            size="small"
+            inputStyleClass="num-input"
+          />
+        </label>
+        <label>
+          <span>Troppo pieno (%)</span>
+          <p-inputnumber
+            [ngModel]="bulk().tooFullPercent"
+            (ngModelChange)="setBulk('tooFullPercent', $event)"
+            [min]="0"
+            [max]="100"
+            [maxFractionDigits]="1"
+            locale="it-IT"
+            size="small"
+            inputStyleClass="num-input"
+          />
+        </label>
+        <p-button label="Applica a tutti" size="small" [outlined]="true" (onClick)="applyBulk()" />
+        <span class="hint">Riempie la tabella sotto; le modifiche diventano effettive solo con Salva.</span>
+      </div>
+    </section>
+
+    <section class="panel table-panel">
+      <div class="panel-header">
+        <span>Serbatoi</span>
+        <div class="actions">
+          @if (savedAt(); as at) {
+            <span class="state">Salvato alle {{ at | date: 'HH:mm:ss' }}</span>
+          }
+          @if (changedCodes().length) {
+            <span class="pending">{{ changedCodes().length }} serbatoi modificati</span>
+          }
+          <p-button label="Annulla modifiche" size="small" [outlined]="true" [disabled]="!changedCodes().length || saving()" (onClick)="discard()" />
+          <p-button label="Salva" size="small" [disabled]="!canSave()" [loading]="saving()" (onClick)="askSave()" />
+        </div>
+      </div>
+
+      @if (saveError(); as e) {
+        <div class="save-error">Salvataggio non riuscito: {{ e }}</div>
+      }
+
+      <div class="table-wrap">
+        <p-table [value]="draft()" size="small" dataKey="code">
+          <ng-template #header>
+            <tr>
+              <th style="width: 60px">Serb.</th>
+              <th style="width: 340px">Nome</th>
+              <th style="width: 170px">Capacità (l)</th>
+              <th style="width: 200px">Soglia pieno (%)</th>
+              <th style="width: 200px">Troppo pieno (%)</th>
+              <th style="width: 150px">Ultima modifica</th>
+            </tr>
+          </ng-template>
+          <ng-template #body let-row>
+            <tr [class.changed]="isChanged(row.code)">
+              <td class="code">{{ row.code }}</td>
+              <td>
+                <input
+                  pInputText
+                  pSize="small"
+                  class="name-input"
+                  [class.field-changed]="isChanged(row.code, 'name')"
+                  [maxlength]="limits.nameMaxLength"
+                  [ngModel]="row.name"
+                  (ngModelChange)="setField(row.code, 'name', $event)"
+                />
+              </td>
+              <td>
+                <p-inputnumber
+                  [ngModel]="row.capacityLiters"
+                  (ngModelChange)="setField(row.code, 'capacityLiters', $event)"
+                  [min]="0"
+                  [max]="limits.capacityMax"
+                  locale="it-IT"
+                  size="small"
+                  inputStyleClass="num-input"
+                  [class.field-changed]="isChanged(row.code, 'capacityLiters')"
+                />
+              </td>
+              <td>
+                <div class="pct-cell">
+                  <p-inputnumber
+                    [ngModel]="row.fullPercent"
+                    (ngModelChange)="setField(row.code, 'fullPercent', $event)"
+                    [min]="0"
+                    [max]="100"
+                    [maxFractionDigits]="1"
+                    locale="it-IT"
+                    size="small"
+                    inputStyleClass="num-input pct-input"
+                    [class.field-changed]="isChanged(row.code, 'fullPercent')"
+                  />
+                  <span class="liters num">{{ liters(row, row.fullPercent) | number: '1.0-0' }} l</span>
+                </div>
+              </td>
+              <td>
+                <div class="pct-cell">
+                  <p-inputnumber
+                    [ngModel]="row.tooFullPercent"
+                    (ngModelChange)="setField(row.code, 'tooFullPercent', $event)"
+                    [min]="0"
+                    [max]="100"
+                    [maxFractionDigits]="1"
+                    locale="it-IT"
+                    size="small"
+                    inputStyleClass="num-input pct-input"
+                    [class.field-changed]="isChanged(row.code, 'tooFullPercent')"
+                  />
+                  <span class="liters num">{{ liters(row, row.tooFullPercent) | number: '1.0-0' }} l</span>
+                </div>
+              </td>
+              <td class="num muted">{{ row.updatedAt ? (row.updatedAt | date: 'dd/MM/yy HH:mm') : '—' }}</td>
+            </tr>
+            @if (errors().get(row.code)?.length) {
+              <tr class="error-row">
+                <td></td>
+                <td colspan="5">{{ errors().get(row.code)!.join(' · ') }}</td>
+              </tr>
+            }
+          </ng-template>
+        </p-table>
+      </div>
+    </section>
+  }
+</div>
+
+<p-confirmdialog [style]="{ width: '460px' }" />

@@ -11,21 +11,23 @@ import {
   TankThresholds,
   ZoneCode,
 } from '../models/tank.models';
+import { TankConfig } from '../models/tank-config';
 import { AlarmQuery, TankApi } from './tank-api';
 
-const CAPACITY_LITERS = 10_000;
-/** Come appsettings del backend: Pieno 85 %, Troppo pieno 95 % per tutti i serbatoi. */
-const FULL_PERCENT = 85;
-const TOO_FULL_PERCENT = 95;
-const PLC_FULL_LITERS = (CAPACITY_LITERS * FULL_PERCENT) / 100;
-const PLC_TOO_FULL_LITERS = (CAPACITY_LITERS * TOO_FULL_PERCENT) / 100;
-// Il DB4 non ha soglie di livello basso: restano null.
-const THRESHOLDS: TankThresholds = {
-  fillLiters: PLC_FULL_LITERS,
-  tooFullLiters: PLC_TOO_FULL_LITERS,
-  lowWarningLiters: null,
-  lowStopLiters: null,
-};
+/** Valori iniziali come da specifica: 10.000 l, pieno 85 %, troppo pieno 95 %. */
+function defaultConfig(code: TankCode): TankConfig {
+  return { code, name: `Serbatoio ${code}`, capacityLiters: 10_000, fullPercent: 85, tooFullPercent: 95, updatedAt: null };
+}
+
+function thresholdsOf(c: TankConfig): TankThresholds {
+  // Il DB4 non ha soglie di livello basso: restano null.
+  return {
+    fillLiters: (c.capacityLiters * c.fullPercent) / 100,
+    tooFullLiters: (c.capacityLiters * c.tooFullPercent) / 100,
+    lowWarningLiters: null,
+    lowStopLiters: null,
+  };
+}
 const HOUR_MS = 3_600_000;
 const INVALID_WINDOW_MS = 25 * 60_000;
 
@@ -36,7 +38,7 @@ interface Profile {
   phase: number;
 }
 
-/** Andamenti simulati: ogni serbatoio ha uno scenario diverso per vedere tutti gli stati. */
+/** Andamenti simulati in decimi di punto percentuale (10.000 = 100 %): ogni serbatoio ha uno scenario diverso. */
 const PROFILES: Record<TankCode, Profile> = {
   A: { base: 6000, amplitude: 2500, periodHours: 20, phase: 0.3 },
   B: { base: 5500, amplitude: 3000, periodHours: 26, phase: 1.7 },
@@ -57,11 +59,11 @@ function noise(seed: number): number {
   return x - Math.floor(x) - 0.5;
 }
 
-function litersAt(code: TankCode, t: number): number {
+function percentAt(code: TankCode, t: number): number {
   const p = PROFILES[code];
   const angle = (t / (p.periodHours * HOUR_MS)) * 2 * Math.PI + p.phase;
   const value = p.base + p.amplitude * Math.sin(angle) + noise(t / 60_000 + code.charCodeAt(0)) * 60;
-  return Math.min(CAPACITY_LITERS, Math.max(0, value));
+  return Math.min(100, Math.max(0, value / 100));
 }
 
 function isInvalidAt(code: TankCode, t: number, now: number): boolean {
@@ -75,6 +77,8 @@ function round1(v: number): number {
 @Injectable({ providedIn: 'root' })
 export class MockTankApi extends TankApi {
   private readonly startedAt = Date.now();
+  /** Configurazione in memoria: si perde ricaricando la pagina, come atteso per i dati simulati. */
+  private config = new Map<TankCode, TankConfig>(TANK_CODES.map((c) => [c, defaultConfig(c)]));
 
   getSystemStatus(): Observable<SystemStatus> {
     const now = Date.now();
@@ -103,16 +107,17 @@ export class MockTankApi extends TankApi {
     // Circa 600 punti per intervallo, come farebbe una query ciclica sullo storico.
     const step = Math.max(60_000, Math.floor((end - start) / 600));
     const samples: LevelSample[] = [];
+    const cfg = this.config.get(code)!;
     for (let t = start; t <= end; t += step) {
       const invalid = isInvalidAt(code, t, now);
-      const liters = invalid ? null : round1(litersAt(code, t));
+      const pct = invalid ? null : percentAt(code, t);
       samples.push({
         timestamp: new Date(t).toISOString(),
-        levelLiters: liters,
-        levelPercent: liters === null ? null : round1((liters / CAPACITY_LITERS) * 100),
+        levelLiters: pct === null ? null : round1((pct * cfg.capacityLiters) / 100),
+        levelPercent: pct === null ? null : round1(pct),
       });
     }
-    return of<TankHistory>({ code, capacityLiters: CAPACITY_LITERS, thresholds: THRESHOLDS, samples }).pipe(delay(250));
+    return of<TankHistory>({ code, capacityLiters: cfg.capacityLiters, thresholds: thresholdsOf(cfg), samples }).pipe(delay(250));
   }
 
   getAlarms(query: AlarmQuery): Observable<AlarmEvent[]> {
@@ -143,21 +148,35 @@ export class MockTankApi extends TankApi {
     return of(result).pipe(delay(150));
   }
 
+  getTankConfig(): Observable<TankConfig[]> {
+    return of(TANK_CODES.map((c) => ({ ...this.config.get(c)! }))).pipe(delay(150));
+  }
+
+  saveTankConfig(changes: TankConfig[]): Observable<TankConfig[]> {
+    const updatedAt = new Date().toISOString();
+    for (const c of changes) {
+      this.config.set(c.code, { ...c, name: c.name.trim(), updatedAt });
+    }
+    return this.getTankConfig().pipe(delay(250));
+  }
+
   private tankAt(code: TankCode, now: number): TankStatus {
+    const cfg = this.config.get(code)!;
     const invalid = isInvalidAt(code, now, now);
-    const liters = invalid ? null : round1(litersAt(code, now));
+    const pct = invalid ? null : percentAt(code, now);
     return {
       code,
-      name: `Serbatoio ${code}`,
+      name: cfg.name,
       zone: ZONE_OF[code],
-      capacityLiters: CAPACITY_LITERS,
-      levelPercent: liters === null ? null : round1((liters / CAPACITY_LITERS) * 100),
-      levelLiters: liters,
+      capacityLiters: cfg.capacityLiters,
+      levelPercent: pct === null ? null : round1(pct),
+      levelLiters: pct === null ? null : round1((pct * cfg.capacityLiters) / 100),
       levelValid: !invalid,
-      full: liters !== null && liters >= PLC_FULL_LITERS,
-      tooFull: liters !== null && liters >= PLC_TOO_FULL_LITERS,
+      // Simulazione dei bit PLC: in realtà X_Full usa la soglia del programma, X_TooFull il sensore.
+      full: pct !== null && pct >= cfg.fullPercent,
+      tooFull: pct !== null && pct >= cfg.tooFullPercent,
       tooFullFault: false,
-      thresholds: THRESHOLDS,
+      thresholds: thresholdsOf(cfg),
       timestamp: new Date(now - 2000).toISOString(),
     };
   }

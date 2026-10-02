@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { unsavedChangesGuard } from './features/settings/unsaved-changes.guard';
 import { Shell } from './layout/shell';
 
 export const routes: Routes = [
@@ -30,11 +31,8 @@ export const routes: Routes = [
       {
         path: 'configurazione',
         title: 'Configurazione — Serbatoi',
-        loadComponent: () => import('./features/placeholder/placeholder').then((m) => m.Placeholder),
-        data: {
-          title: 'Configurazione',
-          note: 'Capacità e soglie per serbatoio: da definire insieme al backend (scrittura su PLC).',
-        },
+        loadComponent: () => import('./features/settings/settings').then((m) => m.Settings),
+        canDeactivate: [unsavedChangesGuard],
       },
       {
         path: 'travaso',
