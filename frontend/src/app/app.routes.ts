@@ -25,8 +25,7 @@ export const routes: Routes = [
       {
         path: 'trend',
         title: 'Trend — Serbatoi',
-        loadComponent: () => import('./features/placeholder/placeholder').then((m) => m.Placeholder),
-        data: { title: 'Trend comparato', note: 'Confronto di più serbatoi sullo stesso grafico: prossimo passo.' },
+        loadComponent: () => import('./features/trends/trends').then((m) => m.Trends),
       },
       {
         path: 'configurazione',

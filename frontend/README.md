@@ -41,7 +41,7 @@ src/app/
     state/      SystemStatusStore (polling del sinottico)
     time/       periodi predefiniti per trend e storico
   shared/       tank-gauge (serbatoio verticale), level-trend (grafico)
-  features/     overview (sinottico), tank-detail, alarms, placeholder
+  features/     overview (sinottico), tank-detail, trends (comparato), alarms, placeholder
   layout/       shell con barra di stato e menu
 ```
 
@@ -93,3 +93,14 @@ Le soglie (`thresholds`) sono tutte facoltative (`null`). Il DB4 espone solo i b
 e dalla validità della misura. I valori di `fillLiters` (soglia di pieno del PLC) e `tooFullLiters`
 (quota del sensore di troppo pieno) li fornisce il backend dalla propria configurazione e servono solo
 a disegnare le linee. Linee, righe e allarmi di livello basso/minimo compaiono solo se il valore c'è.
+
+**Attenzione:** le percentuali di pieno e troppo pieno in configurazione servono solo al disegno.
+L'evento `X_Full` lo decide il PLC con la soglia scritta nel programma Step 7: se si cambia da una
+parte va cambiata anche dall'altra, altrimenti la linea non corrisponde più all'evento.
+
+## Trend comparato
+
+Ogni serbatoio ha un colore fisso (`core/models/tank-colors.ts`), uguale in qualunque combinazione
+di selezione. Palette categorica verificata per il daltonismo sulle coppie adiacenti. Le linee di soglia
+sono grigie per non confondersi con i colori dei serbatoi, e compaiono solo se la soglia è uguale per
+tutti i serbatoi selezionati. Il trend usa `GetTankHistory` una volta per serbatoio, in parallelo.

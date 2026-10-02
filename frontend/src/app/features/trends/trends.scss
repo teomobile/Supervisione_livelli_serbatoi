@@ -1,0 +1,94 @@
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 8px 10px;
+  background: var(--hmi-panel-header);
+  border-bottom: 1px solid var(--hmi-border);
+}
+
+.tank-picker,
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.tank-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 52px;
+  padding: 5px 10px;
+  border: 1px solid var(--hmi-border);
+  background: var(--hmi-empty);
+  color: var(--hmi-text-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+
+  .key {
+    opacity: 0.35;
+  }
+
+  &.on {
+    background: #ffffff;
+    border-color: #3a3f44;
+    color: var(--hmi-text);
+
+    .key {
+      opacity: 1;
+    }
+  }
+}
+
+.link {
+  padding: 5px 6px;
+  border: 0;
+  background: none;
+  color: var(--hmi-text-muted);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Chiave della serie: il colore sta sul segno, mai sul testo. */
+.key {
+  display: inline-block;
+  width: 16px;
+  height: 4px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.tank-toggle .key {
+  margin-right: 0;
+}
+
+.chart {
+  width: 100%;
+  height: 460px;
+}
+
+.message {
+  padding: 24px 12px;
+  color: var(--hmi-text-muted);
+}
+
+.summary {
+  margin-top: 12px;
+  /* Su schermi stretti la tabella scorre dentro il pannello, non la pagina. */
+  overflow-x: auto;
+
+  th,
+  td {
+    white-space: nowrap;
+  }
+
+  .r {
+    text-align: right;
+  }
+}

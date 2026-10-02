@@ -1,0 +1,100 @@
+<div class="page">
+  <div class="page-title">
+    <h1>Trend comparato</h1>
+    <span class="sub">Andamento di più serbatoi nello stesso periodo</span>
+  </div>
+
+  <section class="panel">
+    <div class="filters">
+      <div class="tank-picker" role="group" aria-label="Serbatoi">
+        @for (c of tankCodes; track c) {
+          <button
+            type="button"
+            class="tank-toggle"
+            [class.on]="isSelected(c)"
+            [attr.aria-pressed]="isSelected(c)"
+            (click)="toggle(c)"
+          >
+            <span class="key" [style.background]="colors[c]"></span>{{ c }}
+          </button>
+        }
+        <button type="button" class="link" (click)="selectAll()">Tutti</button>
+        <button type="button" class="link" (click)="clearSelection()">Nessuno</button>
+      </div>
+
+      <div class="controls">
+        <p-selectbutton
+          [options]="unitOptions"
+          optionLabel="label"
+          optionValue="value"
+          [allowEmpty]="false"
+          size="small"
+          [ngModel]="unit()"
+          (ngModelChange)="unit.set($event)"
+        />
+        <p-selectbutton
+          [options]="periodOptions"
+          optionLabel="label"
+          optionValue="value"
+          [allowEmpty]="false"
+          size="small"
+          [ngModel]="period()"
+          (ngModelChange)="period.set($event)"
+        />
+        @if (period() === 'custom') {
+          <p-datepicker
+            selectionMode="range"
+            [showTime]="true"
+            hourFormat="24"
+            dateFormat="dd/mm/yy"
+            [readonlyInput]="true"
+            placeholder="Da — a"
+            size="small"
+            [ngModel]="customRange()"
+            (ngModelChange)="customRange.set($event)"
+          />
+        }
+        <p-button label="Aggiorna" size="small" [outlined]="true" (onClick)="refresh()" />
+        <p-button label="Esporta CSV" size="small" [outlined]="true" [disabled]="!histories().length" (onClick)="exportCsv()" />
+      </div>
+    </div>
+
+    @if (!selected().length) {
+      <div class="message">Selezionare almeno un serbatoio.</div>
+    } @else if (period() === 'custom' && !customRange()?.[1]) {
+      <div class="message">Selezionare data e ora di inizio e di fine.</div>
+    } @else if (error()) {
+      <div class="message">Impossibile leggere lo storico dal backend.</div>
+    } @else {
+      <div echarts class="chart" [options]="options()" [loading]="loading()" [autoResize]="true"></div>
+    }
+  </section>
+
+  @if (selected().length && stats().length) {
+    <section class="panel summary">
+      <div class="panel-header">Riepilogo periodo ({{ unit() === 'liters' ? 'litri' : '%' }})</div>
+      <p-table [value]="stats()" size="small" stripedRows>
+        <ng-template #header>
+          <tr>
+            <th>Serbatoio</th>
+            <th class="r">Min</th>
+            <th class="r">Max</th>
+            <th class="r">Inizio periodo</th>
+            <th class="r">Fine periodo</th>
+            <th class="r">Variazione</th>
+          </tr>
+        </ng-template>
+        <ng-template #body let-s>
+          <tr>
+            <td><span class="key" [style.background]="s.color"></span>Serbatoio {{ s.code }}</td>
+            <td class="r num">{{ formatValue(s.min) }}</td>
+            <td class="r num">{{ formatValue(s.max) }}</td>
+            <td class="r num">{{ formatValue(s.first) }}</td>
+            <td class="r num">{{ formatValue(s.last) }}</td>
+            <td class="r num"><b>{{ s.first !== null && s.last !== null ? formatValue(s.last - s.first) : '—' }}</b></td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </section>
+  }
+</div>
