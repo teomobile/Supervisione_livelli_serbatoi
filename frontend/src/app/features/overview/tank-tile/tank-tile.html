@@ -34,7 +34,7 @@
     <dt>Radar</dt>
     <dd><span class="state" [class.invalid]="!t.levelValid">{{ t.levelValid ? 'OK' : 'Non valida' }}</span></dd>
     <dt>Pieno</dt>
-    <dd><span class="state" [class.alarm]="t.full">{{ t.full ? 'Sì' : 'No' }}</span></dd>
+    <dd><span class="state" [class.full]="t.full">{{ t.full ? 'Sì' : 'No' }}</span></dd>
     <dt>Sensore max</dt>
     <dd>
       @if (t.tooFull) {

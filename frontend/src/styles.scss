@@ -16,6 +16,8 @@
   --hmi-warning-text: #4a3500;
   --hmi-alarm: #c4161c;
   --hmi-alarm-text: #ffffff;
+  /* Pieno: arancio, distinto dal giallo di guasto e dal rosso di troppo pieno. */
+  --hmi-full: #e0600b;
   --hmi-invalid: #9a2a9a;
   --hmi-ok: #2e7d32;
 
@@ -111,7 +113,13 @@ h3 {
     color: var(--hmi-alarm-text);
   }
 
-  /* Stato rilevante ma non anomalo (es. serbatoio pieno). */
+  &.full {
+    background: var(--hmi-full);
+    border-color: var(--hmi-full);
+    color: #fff;
+  }
+
+  /* Stato rilevante ma non anomalo. */
   &.info {
     background: #3a4a57;
     border-color: #3a4a57;

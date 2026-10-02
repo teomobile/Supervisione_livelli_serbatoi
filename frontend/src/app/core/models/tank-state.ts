@@ -16,7 +16,7 @@ export function tankCondition(t: TankStatus): TankCondition {
 
 export interface TankNote {
   label: string;
-  css: 'alarm' | 'warning' | 'info';
+  css: 'alarm' | 'warning' | 'full' | 'info';
   /** Lampeggio per distinguere il troppo pieno (sensore di sicurezza) dal pieno. */
   blink: boolean;
 }
@@ -28,6 +28,6 @@ export function tankNote(t: TankStatus): TankNote | null {
     if (atOrBelow(t.levelLiters, t.thresholds.lowStopLiters)) return { label: 'Liv. minimo', css: 'alarm', blink: false };
     if (atOrBelow(t.levelLiters, t.thresholds.lowWarningLiters)) return { label: 'Liv. basso', css: 'warning', blink: false };
   }
-  if (t.full) return { label: 'Pieno', css: 'alarm', blink: false };
+  if (t.full) return { label: 'Pieno', css: 'full', blink: false };
   return null;
 }

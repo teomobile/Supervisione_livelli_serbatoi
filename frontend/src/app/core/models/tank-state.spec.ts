@@ -55,8 +55,8 @@ describe('tankNote', () => {
     expect(tankNote(tank({ full: true, tooFull: true }))?.label).toBe('Troppo pieno');
   });
 
-  it('pieno in rosso fisso, troppo pieno in rosso lampeggiante', () => {
-    expect(tankNote(tank({ full: true }))).toEqual({ label: 'Pieno', css: 'alarm', blink: false });
+  it('pieno in arancio, troppo pieno in rosso lampeggiante', () => {
+    expect(tankNote(tank({ full: true }))).toEqual({ label: 'Pieno', css: 'full', blink: false });
     expect(tankNote(tank({ tooFull: true }))).toEqual({ label: 'Troppo pieno', css: 'alarm', blink: true });
   });
 
