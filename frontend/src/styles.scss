@@ -1,0 +1,133 @@
+/*
+ * Palette da sala controllo (ispirata a ISA-101):
+ * stato normale in grigio, colore solo per anomalie.
+ */
+:root {
+  --hmi-bg: #d9d9d6;
+  --hmi-panel: #ececea;
+  --hmi-panel-header: #c8c8c4;
+  --hmi-border: #a9a9a4;
+  --hmi-text: #1d1d1b;
+  --hmi-text-muted: #5b5b57;
+  --hmi-liquid: #6f7f8c;
+  --hmi-empty: #f7f7f5;
+
+  --hmi-warning: #e3a500;
+  --hmi-warning-text: #4a3500;
+  --hmi-alarm: #c4161c;
+  --hmi-alarm-text: #ffffff;
+  --hmi-invalid: #9a2a9a;
+  --hmi-ok: #2e7d32;
+
+  --hmi-font: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  --hmi-mono: 'Consolas', 'Roboto Mono', monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--hmi-bg);
+  color: var(--hmi-text);
+  font-family: var(--hmi-font);
+  font-size: 14px;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 600;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Pannello standard con intestazione piatta. */
+.panel {
+  background: var(--hmi-panel);
+  border: 1px solid var(--hmi-border);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  background: var(--hmi-panel-header);
+  border-bottom: 1px solid var(--hmi-border);
+  font-weight: 600;
+}
+
+.page {
+  padding: 12px 16px 24px;
+}
+
+.page-title {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 12px;
+
+  h1 {
+    font-size: 18px;
+  }
+
+  .sub {
+    color: var(--hmi-text-muted);
+  }
+}
+
+/* Indicatori di stato: testo esplicito, il colore rafforza ma non sostituisce. */
+.state {
+  display: inline-block;
+  min-width: 64px;
+  padding: 1px 6px;
+  border: 1px solid var(--hmi-border);
+  background: var(--hmi-empty);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+
+  &.warning {
+    background: var(--hmi-warning);
+    border-color: var(--hmi-warning);
+    color: var(--hmi-warning-text);
+  }
+
+  &.alarm {
+    background: var(--hmi-alarm);
+    border-color: var(--hmi-alarm);
+    color: var(--hmi-alarm-text);
+  }
+
+  &.invalid {
+    background: var(--hmi-invalid);
+    border-color: var(--hmi-invalid);
+    color: #fff;
+  }
+
+  &.blink {
+    animation: hmi-blink 1s steps(1) infinite;
+  }
+}
+
+@keyframes hmi-blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+a {
+  color: inherit;
+}

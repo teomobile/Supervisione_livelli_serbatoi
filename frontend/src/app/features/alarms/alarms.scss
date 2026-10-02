@@ -1,0 +1,17 @@
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+}
+
+.active-row td {
+  font-weight: 600;
+}
+
+.message,
+.muted {
+  padding: 24px 12px;
+  color: var(--hmi-text-muted);
+}

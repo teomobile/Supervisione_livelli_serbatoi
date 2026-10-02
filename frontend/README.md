@@ -1,0 +1,83 @@
+# Supervisione livelli serbatoi — frontend
+
+Angular 21 + PrimeNG 21 + ECharts 6. Interfaccia web per il monitoraggio dei serbatoi A–H
+(dati PLC S7-1200 → System Platform → SQL → ServiceBackend → questo frontend).
+
+## Requisiti
+
+- Node.js `^20.19`, `^22.12` o `>=24` (Node 22.17 va bene)
+- npm 10+
+
+## Avvio
+
+```bash
+npm install
+npm start          # http://localhost:4200
+npm test           # unit test (Vitest)
+npm run build      # output in dist/supervisione-serbatoi/browser
+```
+
+## Configurazione a runtime
+
+`public/config.json` viene letto all'avvio e copiato così com'è nella build: su IIS si modifica
+senza ricompilare.
+
+| Chiave | Significato |
+|---|---|
+| `apiBaseUrl` | URL base delle API del ServiceBackend (es. `http://server:5000/api`) |
+| `useMock` | `true` = dati simulati, nessuna chiamata al backend |
+| `pollingIntervalMs` | intervallo di aggiornamento del sinottico |
+| `staleDataAfterSec` | oltre questa età l'ultimo dato è segnalato come non aggiornato |
+| `heartbeatTimeoutSec` | se l'heartbeat PLC non cambia entro questo tempo: "Com. persa" |
+
+## Struttura
+
+```
+src/app/
+  core/
+    api/        contratto TankApi, implementazione HTTP e mock
+    config/     caricamento config.json
+    models/     DTO e logica di stato serbatoio
+    state/      SystemStatusStore (polling del sinottico)
+    time/       periodi predefiniti per trend e storico
+  shared/       tank-gauge (serbatoio verticale), level-trend (grafico)
+  features/     overview (sinottico), tank-detail, alarms, placeholder
+  layout/       shell con barra di stato e menu
+```
+
+## Scelte grafiche
+
+Palette in stile HMI da sala controllo (ISA-101): grigi neutri per lo stato normale,
+colore solo per le anomalie.
+
+- giallo = livello basso o guasto sensore di massimo
+- rosso = sotto il minimo o sensore di massimo intervenuto
+- viola tratteggiato = misura radar non valida
+
+Il colore è sempre accompagnato da un testo esplicito.
+
+## Contratto API atteso dal backend
+
+Controller `TanksController` (`api/Tanks/...`), stesso stile di `AxlesController`. Ogni risposta
+è racchiusa nella classe `Response` del backend; il frontend la scarta in
+`core/api/backend-response.ts`. La forma ipotizzata è `{ data: T }`, da allineare.
+
+| Metodo | Parametri | Risposta (`data`) |
+|---|---|---|
+| `GET Tanks/GetSystemStatus` | — | `SystemStatus` |
+| `GET Tanks/GetTankHistory` | `code`, `from`, `to` (ISO 8601 UTC) | `TankHistory` |
+| `GET Tanks/GetAlarms` | `activeOnly`, `from?`, `to?`, `code?` | `AlarmEvent[]` |
+
+I tipi sono definiti in `src/app/core/models/tank.models.ts`. Corrispondenza con DB_Gestionale (DB4):
+
+| DB4 | Campo DTO |
+|---|---|
+| `PLCReady`, `Heartbeat`, `DataVersion` | `SystemStatus.plc` |
+| `X_LevelPercent` | `TankStatus.levelPercent` (litri calcolati dal backend con la capacità) |
+| `X_LevelValid` | `levelValid` |
+| `X_Full` | `full` |
+| `X_TooFull` | `tooFull` |
+| `X_TooFullFault` | `tooFullFault` |
+| `Horn_AB` … `Horn_GH` | `SystemStatus.horns` |
+
+Capacità e soglie (`thresholds`) non sono nel DB4: per ora le fornisce il backend da configurazione.

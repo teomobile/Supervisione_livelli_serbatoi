@@ -1,0 +1,93 @@
+<div class="page">
+  <div class="page-title">
+    <h1>Allarmi ed eventi</h1>
+  </div>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div class="toolbar">
+        <p-selectbutton
+          [options]="modeOptions"
+          optionLabel="label"
+          optionValue="value"
+          [allowEmpty]="false"
+          size="small"
+          [ngModel]="mode()"
+          (ngModelChange)="mode.set($event)"
+        />
+        @if (mode() === 'history') {
+          <p-selectbutton
+            [options]="periodOptions"
+            optionLabel="label"
+            optionValue="value"
+            [allowEmpty]="false"
+            size="small"
+            [ngModel]="period()"
+            (ngModelChange)="period.set($event)"
+          />
+        }
+        <p-select
+          [options]="tankOptions"
+          optionLabel="label"
+          optionValue="value"
+          size="small"
+          [ngModel]="tankCode()"
+          (ngModelChange)="tankCode.set($event)"
+        />
+      </div>
+      <div class="toolbar">
+        <p-button label="Aggiorna" size="small" [outlined]="true" (onClick)="refresh()" />
+        <p-button label="Esporta CSV" size="small" [outlined]="true" [disabled]="!result().rows.length" (onClick)="exportCsv()" />
+      </div>
+    </div>
+
+    @if (result().error) {
+      <div class="message">Impossibile leggere gli eventi dal backend.</div>
+    } @else {
+      <p-table
+        [value]="result().rows"
+        [loading]="result().loading"
+        size="small"
+        stripedRows
+        [paginator]="result().rows.length > 20"
+        [rows]="20"
+        sortField="raisedAt"
+        [sortOrder]="-1"
+      >
+        <ng-template #header>
+          <tr>
+            <th pSortableColumn="raisedAt" style="width: 180px">Inizio <p-sortIcon field="raisedAt" /></th>
+            <th style="width: 180px">Fine</th>
+            <th style="width: 90px">Durata</th>
+            <th pSortableColumn="tankCode" style="width: 110px">Serbatoio <p-sortIcon field="tankCode" /></th>
+            <th style="width: 170px">Tipo</th>
+            <th>Descrizione</th>
+          </tr>
+        </ng-template>
+        <ng-template #body let-e>
+          <tr [class.active-row]="!e.clearedAt">
+            <td class="num">{{ e.raisedAt | date: 'dd/MM/yyyy HH:mm:ss' }}</td>
+            <td class="num">
+              @if (e.clearedAt) {
+                {{ e.clearedAt | date: 'dd/MM/yyyy HH:mm:ss' }}
+              } @else {
+                <span class="state alarm">Attivo</span>
+              }
+            </td>
+            <td class="num">{{ durationMin(e) !== null ? durationMin(e) + ' min' : '' }}</td>
+            <td>{{ e.tankCode ?? '—' }}</td>
+            <td>{{ kindLabel(e) }}</td>
+            <td>{{ e.message }}</td>
+          </tr>
+        </ng-template>
+        <ng-template #emptymessage>
+          <tr>
+            <td colspan="6" class="muted">
+              {{ mode() === 'active' ? 'Nessun allarme attivo.' : 'Nessun evento nel periodo selezionato.' }}
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    }
+  </section>
+</div>

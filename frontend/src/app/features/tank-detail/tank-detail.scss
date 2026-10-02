@@ -1,0 +1,84 @@
+.back {
+  font-size: 13px;
+  color: var(--hmi-text-muted);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.current-body {
+  display: flex;
+  gap: 14px;
+  padding: 12px;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-content: start;
+  gap: 4px 10px;
+  margin: 0;
+  flex: 1;
+  font-size: 13px;
+
+  dt {
+    color: var(--hmi-text-muted);
+  }
+
+  dd {
+    margin: 0;
+    text-align: right;
+  }
+
+  .big {
+    font-size: 18px;
+    font-weight: 600;
+  }
+}
+
+.trend {
+  min-width: 0;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  padding: 6px 12px 10px;
+  border-top: 1px solid var(--hmi-border);
+  font-size: 13px;
+  color: var(--hmi-text-muted);
+
+  b {
+    color: var(--hmi-text);
+  }
+}
+
+.message,
+.muted {
+  padding: 24px 12px;
+  color: var(--hmi-text-muted);
+}
+
+@media (max-width: 1000px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}

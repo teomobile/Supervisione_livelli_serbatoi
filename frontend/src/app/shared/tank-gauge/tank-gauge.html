@@ -1,0 +1,14 @@
+<div class="scale">
+  @for (t of ticks; track t) {
+    <span class="tick num" [style.bottom.%]="t">{{ t }}</span>
+  }
+</div>
+<div class="vessel" [class]="condition()">
+  <div class="liquid" [style.height.%]="fillPercent()"></div>
+  @for (m of marks(); track m.key) {
+    <div class="mark" [class]="m.key" [style.bottom.%]="m.pos" [title]="m.title"></div>
+  }
+  @if (condition() === 'invalid') {
+    <span class="invalid-label">N.V.</span>
+  }
+</div>

@@ -1,0 +1,52 @@
+<header class="topbar">
+  <div class="brand">
+    <span class="plant">Impianto olio</span>
+    <span class="title">Supervisione livelli serbatoi</span>
+  </div>
+
+  <div class="status-strip">
+    <div class="item">
+      <span class="label">PLC</span>
+      <span class="state" [class]="plcState().css">{{ plcState().label }}</span>
+    </div>
+    <div class="item">
+      <span class="label">Ultimo dato</span>
+      @if (store.dataAgeSec(); as age) {
+        <span class="state" [class.warning]="store.isStale()">{{ age }} s fa</span>
+      } @else {
+        <span class="state" [class.warning]="store.isStale()">{{ store.loaded() ? 'ora' : '—' }}</span>
+      }
+    </div>
+    <div class="item">
+      <span class="label">Sirene</span>
+      @if (store.activeHorns().length) {
+        <span class="state alarm blink">{{ store.activeHorns().join(' · ') }}</span>
+      } @else {
+        <span class="state">Spente</span>
+      }
+    </div>
+    <div class="clock num">{{ store.now() | date: 'dd/MM/yyyy HH:mm:ss' }}</div>
+  </div>
+</header>
+
+@if (store.error()) {
+  <div class="conn-banner">
+    Backend non raggiungibile: i valori mostrati sono gli ultimi ricevuti.
+    <span class="detail">({{ store.error() }})</span>
+  </div>
+}
+
+<div class="body">
+  <nav class="sidenav">
+    @for (item of nav; track item.path) {
+      @if (item.disabled) {
+        <span class="nav-link disabled" title="Funzione prevista in una fase successiva">{{ item.label }}</span>
+      } @else {
+        <a class="nav-link" [routerLink]="item.path" routerLinkActive="active">{{ item.label }}</a>
+      }
+    }
+  </nav>
+  <main class="content">
+    <router-outlet />
+  </main>
+</div>

@@ -1,0 +1,7 @@
+{
+  "apiBaseUrl": "http://localhost:5000/api",
+  "useMock": true,
+  "pollingIntervalMs": 5000,
+  "staleDataAfterSec": 30,
+  "heartbeatTimeoutSec": 20
+}

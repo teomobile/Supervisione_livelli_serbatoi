@@ -1,0 +1,38 @@
+<div class="page">
+  <div class="page-title">
+    <h1>Sinottico</h1>
+    <span class="sub">Livelli in tempo reale — clic su un serbatoio per il dettaglio e il trend</span>
+  </div>
+
+  @if (!store.loaded()) {
+    <div class="panel empty">
+      {{ store.error() ? 'Backend non raggiungibile.' : 'Caricamento dati…' }}
+    </div>
+  } @else {
+    <div class="zones" [class.stale]="store.isStale()">
+      @for (z of zones(); track z.code) {
+        <section class="panel zone">
+          <div class="panel-header">
+            <span>
+              {{ z.label }}
+              @if (z.role) {
+                <span class="role">{{ z.role }}</span>
+              }
+            </span>
+            <span class="horn">
+              Sirena
+              <span class="state" [class.alarm]="z.hornActive" [class.blink]="z.hornActive">
+                {{ z.hornActive ? 'Attiva' : 'Spenta' }}
+              </span>
+            </span>
+          </div>
+          <div class="tanks">
+            @for (t of z.tanks; track t.code) {
+              <app-tank-tile [tank]="t" />
+            }
+          </div>
+        </section>
+      }
+    </div>
+  }
+</div>

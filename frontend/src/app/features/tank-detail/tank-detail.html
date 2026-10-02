@@ -1,0 +1,130 @@
+<div class="page">
+  <div class="page-title">
+    <a routerLink="/sinottico" class="back">&larr; Sinottico</a>
+    <h1>Serbatoio {{ tankCode() }}</h1>
+    @if (tank(); as t) {
+      <span class="sub">{{ t.name }}</span>
+    }
+  </div>
+
+  <div class="layout">
+    <aside class="panel current">
+      <div class="panel-header">Stato attuale</div>
+      @if (tank(); as t) {
+        <div class="current-body">
+          <app-tank-gauge [tank]="t" [height]="220" />
+          <dl class="fields num">
+            <dt>Livello</dt>
+            <dd class="big">
+              @if (t.levelLiters !== null) {
+                {{ t.levelLiters | number: '1.0-0' }} l
+              } @else {
+                <span class="state invalid">Non valida</span>
+              }
+            </dd>
+            <dt>Percentuale</dt><dd>{{ t.levelPercent !== null ? (t.levelPercent | number: '1.1-1') + ' %' : '—' }}</dd>
+            <dt>Capacità</dt><dd>{{ t.capacityLiters | number: '1.0-0' }} l</dd>
+            <dt>Riempimento</dt><dd>{{ t.thresholds.fillLiters | number: '1.0-0' }} l</dd>
+            <dt>Liv. basso</dt><dd>{{ t.thresholds.lowWarningLiters | number: '1.0-0' }} l</dd>
+            <dt>Liv. minimo</dt><dd>{{ t.thresholds.lowStopLiters | number: '1.0-0' }} l</dd>
+            <dt>Radar</dt>
+            <dd><span class="state" [class.invalid]="!t.levelValid">{{ t.levelValid ? 'OK' : 'Non valida' }}</span></dd>
+            <dt>Sensore max</dt>
+            <dd>
+              @if (t.tooFull) {
+                <span class="state alarm">Intervenuto</span>
+              } @else if (t.tooFullFault) {
+                <span class="state warning">Guasto</span>
+              } @else {
+                <span class="state">OK</span>
+              }
+            </dd>
+            <dt>Dato del</dt><dd>{{ t.timestamp | date: 'dd/MM/yyyy HH:mm:ss' }}</dd>
+          </dl>
+        </div>
+      } @else {
+        <div class="current-body muted">Nessun dato disponibile.</div>
+      }
+    </aside>
+
+    <section class="panel trend">
+      <div class="panel-header">
+        <span>Andamento livello</span>
+        <div class="toolbar">
+          <p-selectbutton
+            [options]="periodOptions"
+            optionLabel="label"
+            optionValue="value"
+            [allowEmpty]="false"
+            size="small"
+            [ngModel]="period()"
+            (ngModelChange)="period.set($event)"
+          />
+          @if (period() === 'custom') {
+            <p-datepicker
+              selectionMode="range"
+              [showTime]="true"
+              hourFormat="24"
+              dateFormat="dd/mm/yy"
+              [readonlyInput]="true"
+              placeholder="Da — a"
+              size="small"
+              [ngModel]="customRange()"
+              (ngModelChange)="customRange.set($event)"
+            />
+          }
+          <p-button label="Aggiorna" size="small" [outlined]="true" (onClick)="refresh()" />
+          <p-button label="Esporta CSV" size="small" [outlined]="true" [disabled]="!history().value" (onClick)="exportCsv()" />
+        </div>
+      </div>
+
+      @if (history().error) {
+        <div class="message">Impossibile leggere lo storico dal backend.</div>
+      } @else if (period() === 'custom' && !customRange()?.[1]) {
+        <div class="message">Selezionare data e ora di inizio e di fine.</div>
+      } @else {
+        <app-level-trend [history]="history().value" [loading]="history().loading" />
+        @if (stats(); as s) {
+          <div class="stats num">
+            <span>Min <b>{{ s.min | number: '1.0-0' }} l</b></span>
+            <span>Max <b>{{ s.max | number: '1.0-0' }} l</b></span>
+            <span>Inizio periodo <b>{{ s.first | number: '1.0-0' }} l</b></span>
+            <span>Fine periodo <b>{{ s.last | number: '1.0-0' }} l</b></span>
+            <span>Variazione <b>{{ s.last - s.first | number: '1.0-0' }} l</b></span>
+          </div>
+        }
+      }
+    </section>
+  </div>
+
+  <section class="panel events">
+    <div class="panel-header">Eventi nel periodo</div>
+    <p-table [value]="events()" size="small" [rows]="10" [paginator]="events().length > 10" stripedRows>
+      <ng-template #header>
+        <tr>
+          <th style="width: 170px">Inizio</th>
+          <th style="width: 170px">Fine</th>
+          <th style="width: 170px">Tipo</th>
+          <th>Descrizione</th>
+        </tr>
+      </ng-template>
+      <ng-template #body let-e>
+        <tr>
+          <td class="num">{{ e.raisedAt | date: 'dd/MM/yyyy HH:mm:ss' }}</td>
+          <td class="num">
+            @if (e.clearedAt) {
+              {{ e.clearedAt | date: 'dd/MM/yyyy HH:mm:ss' }}
+            } @else {
+              <span class="state alarm">Attivo</span>
+            }
+          </td>
+          <td>{{ kindLabel(e) }}</td>
+          <td>{{ e.message }}</td>
+        </tr>
+      </ng-template>
+      <ng-template #emptymessage>
+        <tr><td colspan="4" class="muted">Nessun evento nel periodo selezionato.</td></tr>
+      </ng-template>
+    </p-table>
+  </section>
+</div>
