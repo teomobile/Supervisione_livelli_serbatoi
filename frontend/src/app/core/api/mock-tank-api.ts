@@ -13,8 +13,8 @@ import {
 } from '../models/tank.models';
 import { AlarmQuery, TankApi } from './tank-api';
 
-const CAPACITY_LITERS = 1000;
-const THRESHOLDS: TankThresholds = { fillLiters: 850, lowWarningLiters: 200, lowStopLiters: 100 };
+const CAPACITY_LITERS = 10_000;
+const THRESHOLDS: TankThresholds = { fillLiters: 8500, lowWarningLiters: 2000, lowStopLiters: 1000 };
 const HOUR_MS = 3_600_000;
 const INVALID_WINDOW_MS = 25 * 60_000;
 
@@ -27,14 +27,14 @@ interface Profile {
 
 /** Andamenti simulati: ogni serbatoio ha uno scenario diverso per vedere tutti gli stati. */
 const PROFILES: Record<TankCode, Profile> = {
-  A: { base: 600, amplitude: 250, periodHours: 20, phase: 0.3 },
-  B: { base: 550, amplitude: 300, periodHours: 26, phase: 1.7 },
-  C: { base: 290, amplitude: 120, periodHours: 14, phase: 2.2 },
-  D: { base: 700, amplitude: 100, periodHours: 30, phase: 0.9 },
-  E: { base: 500, amplitude: 200, periodHours: 18, phase: 3.1 }, // misura radar non valida negli ultimi minuti
-  F: { base: 905, amplitude: 40, periodHours: 6, phase: 0.0 }, // vicino al massimo
-  G: { base: 750, amplitude: 150, periodHours: 48, phase: 1.1 },
-  H: { base: 80, amplitude: 30, periodHours: 10, phase: 2.6 }, // sotto il minimo
+  A: { base: 6000, amplitude: 2500, periodHours: 20, phase: 0.3 },
+  B: { base: 5500, amplitude: 3000, periodHours: 26, phase: 1.7 },
+  C: { base: 2900, amplitude: 1200, periodHours: 14, phase: 2.2 },
+  D: { base: 7000, amplitude: 1000, periodHours: 30, phase: 0.9 },
+  E: { base: 5000, amplitude: 2000, periodHours: 18, phase: 3.1 }, // misura radar non valida negli ultimi minuti
+  F: { base: 9050, amplitude: 400, periodHours: 6, phase: 0.0 }, // vicino al massimo
+  G: { base: 7500, amplitude: 1500, periodHours: 48, phase: 1.1 },
+  H: { base: 800, amplitude: 300, periodHours: 10, phase: 2.6 }, // sotto il minimo
 };
 
 const ZONE_OF: Record<TankCode, ZoneCode> = {
@@ -49,7 +49,7 @@ function noise(seed: number): number {
 function litersAt(code: TankCode, t: number): number {
   const p = PROFILES[code];
   const angle = (t / (p.periodHours * HOUR_MS)) * 2 * Math.PI + p.phase;
-  const value = p.base + p.amplitude * Math.sin(angle) + noise(t / 60_000 + code.charCodeAt(0)) * 6;
+  const value = p.base + p.amplitude * Math.sin(angle) + noise(t / 60_000 + code.charCodeAt(0)) * 60;
   return Math.min(CAPACITY_LITERS, Math.max(0, value));
 }
 
@@ -145,7 +145,7 @@ export class MockTankApi extends TankApi {
       levelLiters: liters,
       levelValid: !invalid,
       full: liters !== null && liters >= THRESHOLDS.fillLiters,
-      tooFull: liters !== null && liters >= 935,
+      tooFull: liters !== null && liters >= 9350,
       tooFullFault: false,
       thresholds: THRESHOLDS,
       timestamp: new Date(now - 2000).toISOString(),
