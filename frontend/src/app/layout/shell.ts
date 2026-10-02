@@ -1,7 +1,9 @@
 import { DatePipe } from '@angular/common';
 import { Component, computed, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { ActiveAlarmsStore } from '../core/state/active-alarms.store';
 import { SystemStatusStore } from '../core/state/system-status.store';
+import { plural } from '../core/time/duration';
 
 interface NavItem {
   label: string;
@@ -17,6 +19,8 @@ interface NavItem {
 })
 export class Shell {
   protected readonly store = inject(SystemStatusStore);
+  protected readonly alarms = inject(ActiveAlarmsStore);
+  protected readonly plural = plural;
 
   protected readonly nav: NavItem[] = [
     { label: 'Sinottico', path: '/sinottico' },

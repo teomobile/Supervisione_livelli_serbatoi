@@ -116,3 +116,18 @@ cambiarla anche nel PLC. Uscendo dalla pagina con modifiche non salvate compare 
 
 Lato backend la configurazione va salvata in una tabella SQL (non in `appsettings.json`, che un'API
 non deve riscrivere): `appsettings.json` resta solo per i valori iniziali.
+
+## Allarmi
+
+Gli allarmi attivi sono letti in polling da `ActiveAlarmsStore` (stesso intervallo del sinottico) e
+condivisi tra barra di stato, menu e pagina `/allarmi`. Gravità per tipo (`ALARM_SEVERITY`):
+
+| Gravità | Tipi |
+|---|---|
+| Allarme | Troppo pieno, Livello minimo, Comunicazione PLC |
+| Avviso | Guasto sensore max, Misura non valida, Livello basso |
+
+Vista Attivi: prima gli allarmi poi gli avvisi, durata che si aggiorna in tempo reale.
+Vista Storico: ordine cronologico, periodi predefiniti o intervallo libero. Filtri per serbatoio e
+tipo, export CSV. Il riconoscimento (ack) degli allarmi non è previsto: richiede autenticazione
+(per sapere chi ha riconosciuto) e, per tacitare le sirene, un comando di scrittura sul PLC.

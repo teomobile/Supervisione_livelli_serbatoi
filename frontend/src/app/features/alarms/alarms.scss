@@ -1,12 +1,54 @@
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--hmi-text-muted);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 8px 10px;
+  background: var(--hmi-panel-header);
+  border-bottom: 1px solid var(--hmi-border);
+}
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  font-weight: 400;
 }
 
+.hint {
+  font-size: 12px;
+  color: var(--hmi-text-muted);
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+/* Eventi ancora in corso: grassetto; gli allarmi con una barra rossa a sinistra. */
 .active-row td {
+  font-weight: 600;
+}
+
+.sev-alarm td:first-child {
+  box-shadow: inset 4px 0 0 var(--hmi-alarm);
+}
+
+.tank-link {
+  font-weight: 700;
+}
+
+.stale {
+  padding: 6px 12px;
+  background: var(--hmi-warning);
+  color: var(--hmi-warning-text);
   font-weight: 600;
 }
 

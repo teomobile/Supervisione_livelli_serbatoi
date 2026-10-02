@@ -103,3 +103,20 @@ export const ALARM_LABELS: Record<AlarmKind, string> = {
   LOW_STOP: 'Livello minimo',
   PLC_COMM: 'Comunicazione PLC',
 };
+
+/** Gravità: allarme = richiede intervento, avviso = anomalia da verificare. */
+export type AlarmSeverity = 'alarm' | 'warning';
+
+export const ALARM_SEVERITY: Record<AlarmKind, AlarmSeverity> = {
+  TOO_FULL: 'alarm',
+  LOW_STOP: 'alarm',
+  PLC_COMM: 'alarm',
+  TOO_FULL_FAULT: 'warning',
+  LEVEL_INVALID: 'warning',
+  LOW_WARNING: 'warning',
+};
+
+export const SEVERITY_LABELS: Record<AlarmSeverity, string> = {
+  alarm: 'Allarme',
+  warning: 'Avviso',
+};

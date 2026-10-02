@@ -18,6 +18,16 @@
       }
     </div>
     <div class="item">
+      <span class="label">Allarmi</span>
+      @if (alarms.alarmCount()) {
+        <a class="state alarm" routerLink="/allarmi">{{ plural(alarms.alarmCount(), 'attivo', 'attivi') }}</a>
+      } @else if (alarms.warningCount()) {
+        <a class="state warning" routerLink="/allarmi">{{ plural(alarms.warningCount(), 'avviso', 'avvisi') }}</a>
+      } @else {
+        <span class="state">Nessuno</span>
+      }
+    </div>
+    <div class="item">
       <span class="label">Sirene</span>
       @if (store.activeHorns().length) {
         <span class="state alarm blink">{{ store.activeHorns().join(' · ') }}</span>
@@ -42,7 +52,12 @@
       @if (item.disabled) {
         <span class="nav-link disabled" title="Funzione prevista in una fase successiva">{{ item.label }}</span>
       } @else {
-        <a class="nav-link" [routerLink]="item.path" routerLinkActive="active">{{ item.label }}</a>
+        <a class="nav-link" [routerLink]="item.path" routerLinkActive="active">
+          {{ item.label }}
+          @if (item.path === '/allarmi' && alarms.count()) {
+            <span class="badge" [class.alarm]="alarms.alarmCount() > 0">{{ alarms.count() }}</span>
+          }
+        </a>
       }
     }
   </nav>

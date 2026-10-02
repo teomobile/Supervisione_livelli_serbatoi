@@ -1,10 +1,25 @@
 <div class="page">
   <div class="page-title">
     <h1>Allarmi ed eventi</h1>
+    @if (active.loaded()) {
+      <span class="summary">
+        @if (active.count()) {
+          Attivi:
+          @if (active.alarmCount()) {
+            <span class="state alarm">{{ plural(active.alarmCount(), 'allarme', 'allarmi') }}</span>
+          }
+          @if (active.warningCount()) {
+            <span class="state warning">{{ plural(active.warningCount(), 'avviso', 'avvisi') }}</span>
+          }
+        } @else {
+          Nessun allarme attivo
+        }
+      </span>
+    }
   </div>
 
   <section class="panel">
-    <div class="panel-header">
+    <div class="filters">
       <div class="toolbar">
         <p-selectbutton
           [options]="modeOptions"
@@ -25,6 +40,19 @@
             [ngModel]="period()"
             (ngModelChange)="period.set($event)"
           />
+          @if (period() === 'custom') {
+            <p-datepicker
+              selectionMode="range"
+              [showTime]="true"
+              hourFormat="24"
+              dateFormat="dd/mm/yy"
+              [readonlyInput]="true"
+              placeholder="Da — a"
+              size="small"
+              [ngModel]="customRange()"
+              (ngModelChange)="customRange.set($event)"
+            />
+          }
         }
         <p-select
           [options]="tankOptions"
@@ -34,60 +62,88 @@
           [ngModel]="tankCode()"
           (ngModelChange)="tankCode.set($event)"
         />
+        <p-select
+          [options]="kindOptions"
+          optionLabel="label"
+          optionValue="value"
+          size="small"
+          [ngModel]="kind()"
+          (ngModelChange)="kind.set($event)"
+        />
       </div>
       <div class="toolbar">
+        @if (mode() === 'active') {
+          <span class="hint">Aggiornamento automatico</span>
+        }
         <p-button label="Aggiorna" size="small" [outlined]="true" (onClick)="refresh()" />
-        <p-button label="Esporta CSV" size="small" [outlined]="true" [disabled]="!result().rows.length" (onClick)="exportCsv()" />
+        <p-button label="Esporta CSV" size="small" [outlined]="true" [disabled]="!rows().length" (onClick)="exportCsv()" />
       </div>
     </div>
 
-    @if (result().error) {
+    @if (customIncomplete()) {
+      <div class="message">Selezionare data e ora di inizio e di fine.</div>
+    } @else if (error() && !rows().length) {
       <div class="message">Impossibile leggere gli eventi dal backend.</div>
     } @else {
-      <p-table
-        [value]="result().rows"
-        [loading]="result().loading"
-        size="small"
-        stripedRows
-        [paginator]="result().rows.length > 20"
-        [rows]="20"
-        sortField="raisedAt"
-        [sortOrder]="-1"
-      >
-        <ng-template #header>
-          <tr>
-            <th pSortableColumn="raisedAt" style="width: 180px">Inizio <p-sortIcon field="raisedAt" /></th>
-            <th style="width: 180px">Fine</th>
-            <th style="width: 90px">Durata</th>
-            <th pSortableColumn="tankCode" style="width: 110px">Serbatoio <p-sortIcon field="tankCode" /></th>
-            <th style="width: 170px">Tipo</th>
-            <th>Descrizione</th>
-          </tr>
-        </ng-template>
-        <ng-template #body let-e>
-          <tr [class.active-row]="!e.clearedAt">
-            <td class="num">{{ e.raisedAt | date: 'dd/MM/yyyy HH:mm:ss' }}</td>
-            <td class="num">
-              @if (e.clearedAt) {
-                {{ e.clearedAt | date: 'dd/MM/yyyy HH:mm:ss' }}
-              } @else {
-                <span class="state alarm">Attivo</span>
-              }
-            </td>
-            <td class="num">{{ durationMin(e) !== null ? durationMin(e) + ' min' : '' }}</td>
-            <td>{{ e.tankCode ?? '—' }}</td>
-            <td>{{ kindLabel(e) }}</td>
-            <td>{{ e.message }}</td>
-          </tr>
-        </ng-template>
-        <ng-template #emptymessage>
-          <tr>
-            <td colspan="6" class="muted">
-              {{ mode() === 'active' ? 'Nessun allarme attivo.' : 'Nessun evento nel periodo selezionato.' }}
-            </td>
-          </tr>
-        </ng-template>
-      </p-table>
+      @if (error()) {
+        <div class="stale">Backend non raggiungibile: elenco non aggiornato.</div>
+      }
+      <div class="table-wrap">
+        <p-table
+          [value]="rows()"
+          [loading]="loading()"
+          size="small"
+          [paginator]="rows().length > 25"
+          [rows]="25"
+          dataKey="id"
+        >
+          <ng-template #header>
+            <tr>
+              <th style="width: 100px">Gravità</th>
+              <th pSortableColumn="raisedAt" style="width: 170px">Inizio <p-sortIcon field="raisedAt" /></th>
+              <th style="width: 170px">Fine</th>
+              <th style="width: 120px">Durata</th>
+              <th pSortableColumn="tankCode" style="width: 110px">Serbatoio <p-sortIcon field="tankCode" /></th>
+              <th style="width: 170px">Tipo</th>
+              <th>Descrizione</th>
+            </tr>
+          </ng-template>
+          <ng-template #body let-e>
+            <tr [class.active-row]="!e.clearedAt" [class.sev-alarm]="!e.clearedAt && severity(e) === 'alarm'">
+              <td>
+                <span class="state" [class.alarm]="!e.clearedAt && severity(e) === 'alarm'" [class.warning]="!e.clearedAt && severity(e) === 'warning'">
+                  {{ severityLabel(e) }}
+                </span>
+              </td>
+              <td class="num">{{ e.raisedAt | date: 'dd/MM/yyyy HH:mm:ss' }}</td>
+              <td class="num">
+                @if (e.clearedAt) {
+                  {{ e.clearedAt | date: 'dd/MM/yyyy HH:mm:ss' }}
+                } @else {
+                  <b>In corso</b>
+                }
+              </td>
+              <td class="num">{{ duration(e) }}</td>
+              <td>
+                @if (e.tankCode) {
+                  <a class="tank-link" [routerLink]="['/serbatoi', e.tankCode]">{{ e.tankCode }}</a>
+                } @else {
+                  —
+                }
+              </td>
+              <td>{{ kindLabel(e) }}</td>
+              <td>{{ e.message }}</td>
+            </tr>
+          </ng-template>
+          <ng-template #emptymessage>
+            <tr>
+              <td colspan="7" class="muted">
+                {{ mode() === 'active' ? 'Nessun allarme attivo.' : 'Nessun evento nel periodo selezionato.' }}
+              </td>
+            </tr>
+          </ng-template>
+        </p-table>
+      </div>
     }
   </section>
 </div>
