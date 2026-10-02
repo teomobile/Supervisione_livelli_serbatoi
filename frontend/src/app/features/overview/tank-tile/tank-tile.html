@@ -1,8 +1,8 @@
 @let t = tank();
 <a class="tile" [routerLink]="['/serbatoi', t.code]" [class]="condition()">
-  <app-tank-gauge [tank]="t" [height]="158" />
+  <app-tank-gauge [tank]="t" [height]="190" />
 
-  <div class="info">
+  <div class="main">
     <div class="head">
       <h3>{{ t.name }}</h3>
       @if (levelNote(); as note) {
@@ -13,19 +13,11 @@
     <div class="level">
       @if (t.levelLiters !== null) {
         <span class="liters num">{{ t.levelLiters | number: '1.0-0' }}</span><span class="unit">l</span>
-        <span class="pct num">{{ t.levelPercent | number: '1.1-1' }} %</span>
       } @else {
         <span class="liters invalid">----</span><span class="unit">l</span>
       }
     </div>
-
-    <dl class="fields num">
-      <dt>Capacità</dt><dd>{{ t.capacityLiters | number: '1.0-0' }} l</dd>
-      <dt>Riempimento</dt><dd>{{ t.thresholds.fillLiters | number: '1.0-0' }} l</dd>
-      <dt>Liv. basso</dt><dd>{{ t.thresholds.lowWarningLiters | number: '1.0-0' }} l</dd>
-      <dt>Liv. minimo</dt><dd>{{ t.thresholds.lowStopLiters | number: '1.0-0' }} l</dd>
-      <dt>Dato del</dt><dd>{{ t.timestamp | date: 'dd/MM HH:mm:ss' }}</dd>
-    </dl>
+    <div class="pct num">{{ t.levelPercent !== null ? (t.levelPercent | number: '1.1-1') + ' %' : 'misura non valida' }}</div>
 
     <div class="flags">
       <div class="flag">
@@ -48,4 +40,12 @@
       </div>
     </div>
   </div>
+
+  <dl class="fields num">
+    <dt>Capacità</dt><dd>{{ t.capacityLiters | number: '1.0-0' }} l</dd>
+    <dt>Riempimento</dt><dd>{{ t.thresholds.fillLiters | number: '1.0-0' }} l</dd>
+    <dt>Liv. basso</dt><dd>{{ t.thresholds.lowWarningLiters | number: '1.0-0' }} l</dd>
+    <dt>Liv. minimo</dt><dd>{{ t.thresholds.lowStopLiters | number: '1.0-0' }} l</dd>
+    <dt>Dato del</dt><dd>{{ t.timestamp | date: 'dd/MM HH:mm:ss' }}</dd>
+  </dl>
 </a>

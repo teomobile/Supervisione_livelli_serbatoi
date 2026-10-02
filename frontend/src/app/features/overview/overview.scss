@@ -1,32 +1,53 @@
+/* Una zona per riga: etichetta zona + due serbatoi affiancati. */
 .zones {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(640px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 
   &.stale {
     opacity: 0.6;
   }
 }
 
-.zone .tanks {
+.zone {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: 120px 1fr 1fr;
   gap: 8px;
-  padding: 8px;
 }
 
-.role {
-  margin-left: 8px;
-  font-weight: 400;
-  color: var(--hmi-text-muted);
-}
-
-.horn {
+.zone-label {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 400;
-  font-size: 12px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  background: var(--hmi-panel-header);
+  border: 1px solid var(--hmi-border);
+
+  &.horn-on {
+    border-color: var(--hmi-alarm);
+    border-width: 2px;
+  }
+
+  .zone-name {
+    font-size: 17px;
+    font-weight: 600;
+  }
+
+  .role {
+    color: var(--hmi-text-muted);
+  }
+
+  .horn {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: auto;
+
+    .horn-label {
+      font-size: 12px;
+      color: var(--hmi-text-muted);
+    }
+  }
 }
 
 .empty {
@@ -34,8 +55,22 @@
   color: var(--hmi-text-muted);
 }
 
-@media (max-width: 700px) {
-  .zones {
+@media (max-width: 1100px) {
+  .zone {
     grid-template-columns: 1fr;
+  }
+
+  .zone-label {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+
+    .horn {
+      flex-direction: row;
+      align-items: center;
+      gap: 6px;
+      margin-top: 0;
+      margin-left: auto;
+    }
   }
 }
