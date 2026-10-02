@@ -24,11 +24,19 @@
             </dd>
             <dt>Percentuale</dt><dd>{{ t.levelPercent !== null ? (t.levelPercent | number: '1.1-1') + ' %' : '—' }}</dd>
             <dt>Capacità</dt><dd>{{ t.capacityLiters | number: '1.0-0' }} l</dd>
-            <dt>Riempimento</dt><dd>{{ t.thresholds.fillLiters | number: '1.0-0' }} l</dd>
-            <dt>Liv. basso</dt><dd>{{ t.thresholds.lowWarningLiters | number: '1.0-0' }} l</dd>
-            <dt>Liv. minimo</dt><dd>{{ t.thresholds.lowStopLiters | number: '1.0-0' }} l</dd>
+            @if (t.thresholds.fillLiters !== null) {
+              <dt>Soglia pieno</dt><dd>{{ t.thresholds.fillLiters | number: '1.0-0' }} l</dd>
+            }
+            @if (t.thresholds.lowWarningLiters !== null) {
+              <dt>Liv. basso</dt><dd>{{ t.thresholds.lowWarningLiters | number: '1.0-0' }} l</dd>
+            }
+            @if (t.thresholds.lowStopLiters !== null) {
+              <dt>Liv. minimo</dt><dd>{{ t.thresholds.lowStopLiters | number: '1.0-0' }} l</dd>
+            }
             <dt>Radar</dt>
             <dd><span class="state" [class.invalid]="!t.levelValid">{{ t.levelValid ? 'OK' : 'Non valida' }}</span></dd>
+            <dt>Pieno</dt>
+            <dd><span class="state" [class.info]="t.full">{{ t.full ? 'Sì' : 'No' }}</span></dd>
             <dt>Sensore max</dt>
             <dd>
               @if (t.tooFull) {

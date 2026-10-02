@@ -30,10 +30,10 @@ export class LevelTrend {
     const th = h?.thresholds;
     const thresholdLines = th
       ? [
-          { yAxis: th.fillLiters, name: 'Riempimento', lineStyle: { color: '#1d1d1b', type: 'solid' } },
+          { yAxis: th.fillLiters, name: 'Soglia pieno', lineStyle: { color: '#1d1d1b', type: 'solid' } },
           { yAxis: th.lowWarningLiters, name: 'Liv. basso', lineStyle: { color: '#b07f00', type: 'dashed' } },
           { yAxis: th.lowStopLiters, name: 'Liv. minimo', lineStyle: { color: '#c4161c', type: 'dashed' } },
-        ]
+        ].filter((l) => l.yAxis !== null)
       : [];
 
     return {

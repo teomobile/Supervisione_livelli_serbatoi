@@ -5,8 +5,8 @@
   <div class="main">
     <div class="head">
       <h3>{{ t.name }}</h3>
-      @if (levelNote(); as note) {
-        <span class="state" [class.alarm]="condition() === 'alarm'" [class.warning]="condition() === 'warning'">{{ note }}</span>
+      @if (note(); as n) {
+        <span class="state" [class]="n.css">{{ n.label }}</span>
       }
     </div>
 
@@ -27,7 +27,7 @@
     </div>
     <div class="flag">
       <span class="flag-label">Pieno</span>
-      <span class="state">{{ t.full ? 'Sì' : 'No' }}</span>
+      <span class="state" [class.info]="t.full">{{ t.full ? 'Sì' : 'No' }}</span>
     </div>
     <div class="flag">
       <span class="flag-label">Sens. max</span>
@@ -43,9 +43,15 @@
 
   <dl class="fields num">
     <dt>Capacità</dt><dd>{{ t.capacityLiters | number: '1.0-0' }} l</dd>
-    <dt>Riempimento</dt><dd>{{ t.thresholds.fillLiters | number: '1.0-0' }} l</dd>
-    <dt>Liv. basso</dt><dd>{{ t.thresholds.lowWarningLiters | number: '1.0-0' }} l</dd>
-    <dt>Liv. minimo</dt><dd>{{ t.thresholds.lowStopLiters | number: '1.0-0' }} l</dd>
+    @if (t.thresholds.fillLiters !== null) {
+      <dt>Soglia pieno</dt><dd>{{ t.thresholds.fillLiters | number: '1.0-0' }} l</dd>
+    }
+    @if (t.thresholds.lowWarningLiters !== null) {
+      <dt>Liv. basso</dt><dd>{{ t.thresholds.lowWarningLiters | number: '1.0-0' }} l</dd>
+    }
+    @if (t.thresholds.lowStopLiters !== null) {
+      <dt>Liv. minimo</dt><dd>{{ t.thresholds.lowStopLiters | number: '1.0-0' }} l</dd>
+    }
     <dt>Dato del</dt><dd>{{ t.timestamp | date: 'dd/MM HH:mm:ss' }}</dd>
   </dl>
 </a>

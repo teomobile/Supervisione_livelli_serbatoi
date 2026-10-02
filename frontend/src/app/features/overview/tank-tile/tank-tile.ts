@@ -1,7 +1,7 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { Component, computed, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { tankCondition } from '../../../core/models/tank-state';
+import { tankCondition, tankNote } from '../../../core/models/tank-state';
 import { TankStatus } from '../../../core/models/tank.models';
 import { TankGauge } from '../../../shared/tank-gauge/tank-gauge';
 
@@ -16,11 +16,5 @@ export class TankTile {
 
   protected readonly condition = computed(() => tankCondition(this.tank()));
 
-  protected readonly levelNote = computed(() => {
-    const t = this.tank();
-    if (t.levelLiters === null) return null;
-    if (t.levelLiters <= t.thresholds.lowStopLiters) return 'Liv. minimo';
-    if (t.levelLiters <= t.thresholds.lowWarningLiters) return 'Liv. basso';
-    return null;
-  });
+  protected readonly note = computed(() => tankNote(this.tank()));
 }

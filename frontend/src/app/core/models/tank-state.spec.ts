@@ -1,19 +1,22 @@
-import { tankCondition } from './tank-state';
-import { TankStatus } from './tank.models';
+import { tankCondition, tankNote } from './tank-state';
+import { TankStatus, TankThresholds } from './tank.models';
+
+const NO_THRESHOLDS: TankThresholds = { fillLiters: null, lowWarningLiters: null, lowStopLiters: null };
+const WITH_THRESHOLDS: TankThresholds = { fillLiters: 8500, lowWarningLiters: 2000, lowStopLiters: 1000 };
 
 function tank(overrides: Partial<TankStatus>): TankStatus {
   return {
     code: 'A',
     name: 'Serbatoio A',
     zone: 'AB',
-    capacityLiters: 1000,
+    capacityLiters: 10000,
     levelPercent: 50,
-    levelLiters: 500,
+    levelLiters: 5000,
     levelValid: true,
     full: false,
     tooFull: false,
     tooFullFault: false,
-    thresholds: { fillLiters: 850, lowWarningLiters: 200, lowStopLiters: 100 },
+    thresholds: NO_THRESHOLDS,
     timestamp: '2026-10-02T08:00:00Z',
     ...overrides,
   };
@@ -29,13 +32,34 @@ describe('tankCondition', () => {
     expect(tankCondition(tank({ levelLiters: null }))).toBe('invalid');
   });
 
-  it('allarme con sensore di massimo intervenuto o sotto il minimo', () => {
+  it('allarme con sensore di massimo intervenuto', () => {
     expect(tankCondition(tank({ tooFull: true }))).toBe('alarm');
-    expect(tankCondition(tank({ levelLiters: 100 }))).toBe('alarm');
   });
 
-  it('warning con livello basso o guasto sensore di massimo', () => {
-    expect(tankCondition(tank({ levelLiters: 150 }))).toBe('warning');
+  it('warning con guasto sensore di massimo', () => {
     expect(tankCondition(tank({ tooFullFault: true }))).toBe('warning');
+  });
+
+  it('senza soglie dal DB4 il livello basso non genera allarmi', () => {
+    expect(tankCondition(tank({ levelLiters: 100 }))).toBe('normal');
+  });
+
+  it('con soglie configurate usa livello basso e minimo', () => {
+    expect(tankCondition(tank({ thresholds: WITH_THRESHOLDS, levelLiters: 1500 }))).toBe('warning');
+    expect(tankCondition(tank({ thresholds: WITH_THRESHOLDS, levelLiters: 1000 }))).toBe('alarm');
+  });
+});
+
+describe('tankNote', () => {
+  it('troppo pieno prima di pieno', () => {
+    expect(tankNote(tank({ full: true, tooFull: true }))?.label).toBe('Troppo pieno');
+  });
+
+  it('pieno come informazione', () => {
+    expect(tankNote(tank({ full: true }))).toEqual({ label: 'Pieno', css: 'info' });
+  });
+
+  it('nessuna nota in condizioni normali', () => {
+    expect(tankNote(tank({}))).toBeNull();
   });
 });

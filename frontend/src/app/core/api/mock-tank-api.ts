@@ -14,7 +14,11 @@ import {
 import { AlarmQuery, TankApi } from './tank-api';
 
 const CAPACITY_LITERS = 10_000;
-const THRESHOLDS: TankThresholds = { fillLiters: 8500, lowWarningLiters: 2000, lowStopLiters: 1000 };
+// Come il DB4 di oggi: il PLC espone i bit X_Full / X_TooFull ma non i valori di soglia.
+const THRESHOLDS: TankThresholds = { fillLiters: null, lowWarningLiters: null, lowStopLiters: null };
+/** Soglie interne al PLC, usate solo per simulare i bit. */
+const PLC_FULL_LITERS = 8500;
+const PLC_TOO_FULL_LITERS = 9350;
 const HOUR_MS = 3_600_000;
 const INVALID_WINDOW_MS = 25 * 60_000;
 
@@ -108,15 +112,14 @@ export class MockTankApi extends TankApi {
     const now = Date.now();
     const ago = (minutes: number) => new Date(now - minutes * 60_000).toISOString();
     const all: AlarmEvent[] = [
-      { id: 12, kind: 'LOW_STOP', tankCode: 'H', message: 'Serbatoio H sotto livello minimo', raisedAt: ago(95), clearedAt: null },
       { id: 11, kind: 'LEVEL_INVALID', tankCode: 'E', message: 'Misura radar serbatoio E non valida', raisedAt: ago(25), clearedAt: null },
       { id: 10, kind: 'TOO_FULL', tankCode: 'F', message: 'Serbatoio F livello massimo raggiunto', raisedAt: ago(180), clearedAt: ago(171) },
-      { id: 9, kind: 'LOW_WARNING', tankCode: 'C', message: 'Serbatoio C livello basso', raisedAt: ago(320), clearedAt: ago(250) },
+      { id: 9, kind: 'TOO_FULL', tankCode: 'G', message: 'Serbatoio G livello massimo raggiunto', raisedAt: ago(320), clearedAt: ago(312) },
       { id: 8, kind: 'PLC_COMM', tankCode: null, message: 'Comunicazione PLC interrotta', raisedAt: ago(1500), clearedAt: ago(1493) },
       { id: 7, kind: 'TOO_FULL_FAULT', tankCode: 'D', message: 'Anomalia sensore massimo livello serbatoio D', raisedAt: ago(2900), clearedAt: ago(2650) },
-      { id: 6, kind: 'LOW_WARNING', tankCode: 'H', message: 'Serbatoio H livello basso', raisedAt: ago(3100), clearedAt: null },
+      { id: 6, kind: 'LEVEL_INVALID', tankCode: 'H', message: 'Misura radar serbatoio H non valida', raisedAt: ago(3100), clearedAt: ago(3085) },
       { id: 5, kind: 'TOO_FULL', tankCode: 'B', message: 'Serbatoio B livello massimo raggiunto', raisedAt: ago(4400), clearedAt: ago(4392) },
-      { id: 4, kind: 'LOW_WARNING', tankCode: 'A', message: 'Serbatoio A livello basso', raisedAt: ago(6200), clearedAt: ago(5900) },
+      { id: 4, kind: 'TOO_FULL', tankCode: 'A', message: 'Serbatoio A livello massimo raggiunto', raisedAt: ago(6200), clearedAt: ago(6191) },
     ];
     const status = TANK_CODES.map((code) => this.tankAt(code, now));
     if (status.find((t) => t.code === 'F')?.tooFull) {
@@ -144,8 +147,8 @@ export class MockTankApi extends TankApi {
       levelPercent: liters === null ? null : round1((liters / CAPACITY_LITERS) * 100),
       levelLiters: liters,
       levelValid: !invalid,
-      full: liters !== null && liters >= THRESHOLDS.fillLiters,
-      tooFull: liters !== null && liters >= 9350,
+      full: liters !== null && liters >= PLC_FULL_LITERS,
+      tooFull: liters !== null && liters >= PLC_TOO_FULL_LITERS,
       tooFullFault: false,
       thresholds: THRESHOLDS,
       timestamp: new Date(now - 2000).toISOString(),

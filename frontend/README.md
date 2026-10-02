@@ -86,4 +86,9 @@ I tipi sono definiti in `src/app/core/models/tank.models.ts`. Corrispondenza con
 | `X_TooFullFault` | `tooFullFault` |
 | `Horn_AB` … `Horn_GH` | `SystemStatus.horns` |
 
-Capacità e soglie (`thresholds`) non sono nel DB4: per ora le fornisce il backend da configurazione.
+La capacità non è nel DB4: la fornisce il backend da configurazione (oggi 10.000 l per serbatoio).
+
+Le soglie (`thresholds`) sono tutte facoltative (`null`). Oggi il DB4 espone solo i bit
+`X_Full`/`X_TooFull`/`X_TooFullFault`, non i valori: il colore del serbatoio dipende solo da questi bit
+e dalla validità della misura. Le linee di soglia e gli allarmi di livello basso/minimo compaiono
+solo quando il backend restituisce un valore.

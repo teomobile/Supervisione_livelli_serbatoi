@@ -111,6 +111,13 @@ h3 {
     color: var(--hmi-alarm-text);
   }
 
+  /* Stato rilevante ma non anomalo (es. serbatoio pieno). */
+  &.info {
+    background: #3a4a57;
+    border-color: #3a4a57;
+    color: #fff;
+  }
+
   &.invalid {
     background: var(--hmi-invalid);
     border-color: var(--hmi-invalid);

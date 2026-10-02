@@ -22,12 +22,14 @@ export class TankGauge {
 
   protected readonly marks = computed(() => {
     const t = this.tank();
-    const pct = (liters: number) => (liters / t.capacityLiters) * 100;
-    return [
-      { key: 'fill', pos: pct(t.thresholds.fillLiters), title: `Riempimento ${t.thresholds.fillLiters} l` },
-      { key: 'warn', pos: pct(t.thresholds.lowWarningLiters), title: `Livello basso ${t.thresholds.lowWarningLiters} l` },
-      { key: 'stop', pos: pct(t.thresholds.lowStopLiters), title: `Livello minimo ${t.thresholds.lowStopLiters} l` },
+    const marks = [
+      { key: 'fill', liters: t.thresholds.fillLiters, label: 'Soglia pieno' },
+      { key: 'warn', liters: t.thresholds.lowWarningLiters, label: 'Livello basso' },
+      { key: 'stop', liters: t.thresholds.lowStopLiters, label: 'Livello minimo' },
     ];
+    return marks
+      .filter((m): m is { key: string; liters: number; label: string } => m.liters !== null)
+      .map((m) => ({ key: m.key, pos: (m.liters / t.capacityLiters) * 100, title: `${m.label} ${m.liters} l` }));
   });
 
   protected readonly ticks = [100, 75, 50, 25, 0];

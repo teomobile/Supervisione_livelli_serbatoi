@@ -4,14 +4,17 @@ export type TankCode = (typeof TANK_CODES)[number];
 /** Zone servite dalle sirene Horn_AB, Horn_CD, Horn_EF, Horn_GH del DB_Gestionale. */
 export type ZoneCode = 'AB' | 'CD' | 'EF' | 'GH';
 
-/** Soglie espresse in litri, come le usano gli operatori. */
+/**
+ * Soglie in litri. Oggi il DB4 espone solo i bit (X_Full, X_TooFull), non i valori:
+ * null = soglia non disponibile, non viene disegnata né usata per gli allarmi.
+ */
 export interface TankThresholds {
-  /** Livello di riempimento obiettivo (corrisponde a X_Full lato PLC). */
-  fillLiters: number;
-  /** Livello basso: preavviso. */
-  lowWarningLiters: number;
-  /** Livello minimo: stop prelievo. */
-  lowStopLiters: number;
+  /** Soglia di pieno usata dal PLC per X_Full. */
+  fillLiters: number | null;
+  /** Livello basso: preavviso (non ancora presente nel DB4). */
+  lowWarningLiters: number | null;
+  /** Livello minimo: stop prelievo (non ancora presente nel DB4). */
+  lowStopLiters: number | null;
 }
 
 export interface TankStatus {
