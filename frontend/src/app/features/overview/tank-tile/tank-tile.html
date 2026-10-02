@@ -18,26 +18,26 @@
       }
     </div>
     <div class="pct num">{{ t.levelPercent !== null ? (t.levelPercent | number: '1.1-1') + ' %' : 'misura non valida' }}</div>
+  </div>
 
-    <div class="flags">
-      <div class="flag">
-        <span class="flag-label">Radar</span>
-        <span class="state" [class.invalid]="!t.levelValid">{{ t.levelValid ? 'OK' : 'Non valida' }}</span>
-      </div>
-      <div class="flag">
-        <span class="flag-label">Pieno</span>
-        <span class="state">{{ t.full ? 'Sì' : 'No' }}</span>
-      </div>
-      <div class="flag">
-        <span class="flag-label">Sens. max</span>
-        @if (t.tooFull) {
-          <span class="state alarm">Intervenuto</span>
-        } @else if (t.tooFullFault) {
-          <span class="state warning">Guasto</span>
-        } @else {
-          <span class="state">OK</span>
-        }
-      </div>
+  <div class="flags">
+    <div class="flag">
+      <span class="flag-label">Radar</span>
+      <span class="state" [class.invalid]="!t.levelValid">{{ t.levelValid ? 'OK' : 'Non valida' }}</span>
+    </div>
+    <div class="flag">
+      <span class="flag-label">Pieno</span>
+      <span class="state">{{ t.full ? 'Sì' : 'No' }}</span>
+    </div>
+    <div class="flag">
+      <span class="flag-label">Sens. max</span>
+      @if (t.tooFull) {
+        <span class="state alarm">Intervenuto</span>
+      } @else if (t.tooFullFault) {
+        <span class="state warning">Guasto</span>
+      } @else {
+        <span class="state">OK</span>
+      }
     </div>
   </div>
 

@@ -1,11 +1,17 @@
 :host {
   display: block;
   min-width: 0;
+  container-type: inline-size;
 }
 
+/* Serbatoio | livello + stati | dati. Sotto 640 px gli stati scendono a tutta larghezza. */
 .tile {
-  display: flex;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'gauge main fields'
+    'gauge flags fields';
+  gap: 8px 16px;
   padding: 12px 14px;
   height: 100%;
   background: var(--hmi-panel);
@@ -31,11 +37,15 @@
   }
 }
 
+app-tank-gauge {
+  grid-area: gauge;
+}
+
 .main {
+  grid-area: main;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  flex: 1;
   min-width: 0;
 }
 
@@ -84,10 +94,11 @@
 }
 
 .flags {
+  grid-area: flags;
+  align-self: end;
   display: flex;
   flex-wrap: wrap;
   gap: 6px 12px;
-  margin-top: auto;
 }
 
 .flag {
@@ -106,14 +117,15 @@
 }
 
 .fields {
+  grid-area: fields;
   display: grid;
   grid-template-columns: auto auto;
   align-content: start;
-  gap: 3px 14px;
+  gap: 6px 20px;
   margin: 0;
-  padding-left: 14px;
+  padding-left: 18px;
   border-left: 1px solid var(--hmi-border);
-  font-size: 14px;
+  font-size: 17px;
 
   dt {
     color: var(--hmi-text-muted);
@@ -121,17 +133,39 @@
 
   dd {
     margin: 0;
+    font-weight: 700;
     text-align: right;
   }
 }
 
-@media (max-width: 560px) {
+@container (max-width: 640px) {
   .tile {
-    flex-wrap: wrap;
+    grid-template-areas:
+      'gauge main fields'
+      'gauge flags flags';
   }
 
   .fields {
-    width: 100%;
+    gap: 4px 12px;
+    padding-left: 12px;
+    font-size: 15px;
+  }
+
+  .level .liters {
+    font-size: 36px;
+  }
+}
+
+@container (max-width: 440px) {
+  .tile {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'gauge main'
+      'gauge flags'
+      'fields fields';
+  }
+
+  .fields {
     padding: 8px 0 0;
     border-left: 0;
     border-top: 1px solid var(--hmi-border);
