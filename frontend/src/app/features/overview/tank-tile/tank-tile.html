@@ -6,7 +6,7 @@
     <div class="head">
       <h3>{{ t.name }}</h3>
       @if (note(); as n) {
-        <span class="state" [class]="n.css">{{ n.label }}</span>
+        <span class="state" [class]="n.css" [class.blink]="n.blink">{{ n.label }}</span>
       }
     </div>
 
@@ -20,27 +20,6 @@
     <div class="pct num">{{ t.levelPercent !== null ? (t.levelPercent | number: '1.1-1') + ' %' : 'misura non valida' }}</div>
   </div>
 
-  <div class="flags">
-    <div class="flag">
-      <span class="flag-label">Radar</span>
-      <span class="state" [class.invalid]="!t.levelValid">{{ t.levelValid ? 'OK' : 'Non valida' }}</span>
-    </div>
-    <div class="flag">
-      <span class="flag-label">Pieno</span>
-      <span class="state" [class.info]="t.full">{{ t.full ? 'Sì' : 'No' }}</span>
-    </div>
-    <div class="flag">
-      <span class="flag-label">Sens. max</span>
-      @if (t.tooFull) {
-        <span class="state alarm">Intervenuto</span>
-      } @else if (t.tooFullFault) {
-        <span class="state warning">Guasto</span>
-      } @else {
-        <span class="state">OK</span>
-      }
-    </div>
-  </div>
-
   <dl class="fields num">
     <dt>Capacità</dt><dd>{{ t.capacityLiters | number: '1.0-0' }} l</dd>
     @if (t.thresholds.fillLiters !== null) {
@@ -52,6 +31,20 @@
     @if (t.thresholds.lowStopLiters !== null) {
       <dt>Liv. minimo</dt><dd>{{ t.thresholds.lowStopLiters | number: '1.0-0' }} l</dd>
     }
+    <dt>Radar</dt>
+    <dd><span class="state" [class.invalid]="!t.levelValid">{{ t.levelValid ? 'OK' : 'Non valida' }}</span></dd>
+    <dt>Pieno</dt>
+    <dd><span class="state" [class.alarm]="t.full">{{ t.full ? 'Sì' : 'No' }}</span></dd>
+    <dt>Sensore max</dt>
+    <dd>
+      @if (t.tooFull) {
+        <span class="state alarm blink">Intervenuto</span>
+      } @else if (t.tooFullFault) {
+        <span class="state warning">Guasto</span>
+      } @else {
+        <span class="state">OK</span>
+      }
+    </dd>
     <dt>Dato del</dt><dd>{{ t.timestamp | date: 'dd/MM HH:mm:ss' }}</dd>
   </dl>
 </a>

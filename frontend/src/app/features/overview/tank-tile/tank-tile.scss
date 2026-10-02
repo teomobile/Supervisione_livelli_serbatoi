@@ -4,13 +4,11 @@
   container-type: inline-size;
 }
 
-/* Serbatoio | livello + stati | dati. Sotto 640 px gli stati scendono a tutta larghezza. */
+/* Serbatoio | livello | dati e stati. Sotto 440 px i dati scendono sotto il serbatoio. */
 .tile {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-areas:
-    'gauge main fields'
-    'gauge flags fields';
+  grid-template-areas: 'gauge main fields';
   gap: 8px 16px;
   padding: 12px 14px;
   height: 100%;
@@ -93,29 +91,6 @@ app-tank-gauge {
   color: var(--hmi-text-muted);
 }
 
-.flags {
-  grid-area: flags;
-  align-self: end;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-}
-
-.flag {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-
-  .flag-label {
-    font-size: 12px;
-    color: var(--hmi-text-muted);
-  }
-
-  .state {
-    font-size: 12px;
-  }
-}
-
 .fields {
   grid-area: fields;
   display: grid;
@@ -136,15 +111,14 @@ app-tank-gauge {
     font-weight: 700;
     text-align: right;
   }
+
+  .state {
+    min-width: 72px;
+    font-size: 14px;
+  }
 }
 
 @container (max-width: 640px) {
-  .tile {
-    grid-template-areas:
-      'gauge main fields'
-      'gauge flags flags';
-  }
-
   .fields {
     gap: 4px 12px;
     padding-left: 12px;
@@ -161,7 +135,6 @@ app-tank-gauge {
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-areas:
       'gauge main'
-      'gauge flags'
       'fields fields';
   }
 
