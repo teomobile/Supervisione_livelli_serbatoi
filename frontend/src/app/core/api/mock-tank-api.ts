@@ -14,9 +14,11 @@ import {
 import { AlarmQuery, TankApi } from './tank-api';
 
 const CAPACITY_LITERS = 10_000;
-/** Valori di esempio: quelli reali li fornirà il backend dalla sua configurazione. */
-const PLC_FULL_LITERS = 8500;
-const PLC_TOO_FULL_LITERS = 9350;
+/** Come appsettings del backend: Pieno 85 %, Troppo pieno 95 % per tutti i serbatoi. */
+const FULL_PERCENT = 85;
+const TOO_FULL_PERCENT = 95;
+const PLC_FULL_LITERS = (CAPACITY_LITERS * FULL_PERCENT) / 100;
+const PLC_TOO_FULL_LITERS = (CAPACITY_LITERS * TOO_FULL_PERCENT) / 100;
 // Il DB4 non ha soglie di livello basso: restano null.
 const THRESHOLDS: TankThresholds = {
   fillLiters: PLC_FULL_LITERS,
@@ -41,7 +43,7 @@ const PROFILES: Record<TankCode, Profile> = {
   C: { base: 2900, amplitude: 1200, periodHours: 14, phase: 2.2 },
   D: { base: 7000, amplitude: 1000, periodHours: 30, phase: 0.9 },
   E: { base: 5000, amplitude: 2000, periodHours: 18, phase: 3.1 }, // misura radar non valida negli ultimi minuti
-  F: { base: 9050, amplitude: 400, periodHours: 6, phase: 0.0 }, // vicino al massimo
+  F: { base: 9150, amplitude: 400, periodHours: 6, phase: 0.0 }, // vicino al massimo
   G: { base: 7500, amplitude: 1500, periodHours: 48, phase: 1.1 },
   H: { base: 800, amplitude: 300, periodHours: 10, phase: 2.6 }, // sotto il minimo
 };
