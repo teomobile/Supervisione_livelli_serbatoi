@@ -14,11 +14,16 @@ import {
 import { AlarmQuery, TankApi } from './tank-api';
 
 const CAPACITY_LITERS = 10_000;
-// Come il DB4 di oggi: il PLC espone i bit X_Full / X_TooFull ma non i valori di soglia.
-const THRESHOLDS: TankThresholds = { fillLiters: null, lowWarningLiters: null, lowStopLiters: null };
-/** Soglie interne al PLC, usate solo per simulare i bit. */
+/** Valori di esempio: quelli reali li fornirà il backend dalla sua configurazione. */
 const PLC_FULL_LITERS = 8500;
 const PLC_TOO_FULL_LITERS = 9350;
+// Il DB4 non ha soglie di livello basso: restano null.
+const THRESHOLDS: TankThresholds = {
+  fillLiters: PLC_FULL_LITERS,
+  tooFullLiters: PLC_TOO_FULL_LITERS,
+  lowWarningLiters: null,
+  lowStopLiters: null,
+};
 const HOUR_MS = 3_600_000;
 const INVALID_WINDOW_MS = 25 * 60_000;
 

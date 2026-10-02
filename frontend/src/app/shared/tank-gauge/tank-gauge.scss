@@ -71,11 +71,48 @@
   border-top: 2px dashed #1d1d1b;
   transform: translateY(1px);
 
+  &.toofull {
+    border-top: 2px solid var(--hmi-alarm);
+  }
+
   &.fill {
-    border-top-style: solid;
+    border-top: 2px solid var(--hmi-full);
+  }
+
+  &.warn {
+    border-top-color: var(--hmi-warning);
   }
 
   &.stop {
     border-top-color: var(--hmi-alarm);
+  }
+}
+
+/* Etichette delle soglie, a destra del serbatoio. */
+.mark-labels {
+  position: relative;
+  width: 34px;
+}
+
+.mark-label {
+  position: absolute;
+  left: 0;
+  transform: translateY(50%);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+
+  &.toofull,
+  &.stop {
+    color: var(--hmi-alarm);
+  }
+
+  &.fill {
+    color: var(--hmi-full);
+  }
+
+  &.warn {
+    color: #8a6400;
   }
 }

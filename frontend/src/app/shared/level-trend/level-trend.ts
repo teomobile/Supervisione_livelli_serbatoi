@@ -30,7 +30,8 @@ export class LevelTrend {
     const th = h?.thresholds;
     const thresholdLines = th
       ? [
-          { yAxis: th.fillLiters, name: 'Soglia pieno', lineStyle: { color: '#1d1d1b', type: 'solid' } },
+          { yAxis: th.tooFullLiters, name: 'Troppo pieno', lineStyle: { color: '#c4161c', type: 'solid' } },
+          { yAxis: th.fillLiters, name: 'Pieno', lineStyle: { color: '#e0600b', type: 'solid' } },
           { yAxis: th.lowWarningLiters, name: 'Liv. basso', lineStyle: { color: '#b07f00', type: 'dashed' } },
           { yAxis: th.lowStopLiters, name: 'Liv. minimo', lineStyle: { color: '#c4161c', type: 'dashed' } },
         ].filter((l) => l.yAxis !== null)
@@ -39,7 +40,7 @@ export class LevelTrend {
     return {
       animation: false,
       textStyle: { fontFamily: 'Segoe UI, Roboto, Arial, sans-serif' },
-      grid: { left: 56, right: 96, top: 16, bottom: 64 },
+      grid: { left: 56, right: 100, top: 16, bottom: 64 },
       tooltip: {
         trigger: 'axis',
         formatter: (params: unknown) => {

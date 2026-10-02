@@ -23,13 +23,19 @@ export class TankGauge {
   protected readonly marks = computed(() => {
     const t = this.tank();
     const marks = [
-      { key: 'fill', liters: t.thresholds.fillLiters, label: 'Soglia pieno' },
-      { key: 'warn', liters: t.thresholds.lowWarningLiters, label: 'Livello basso' },
-      { key: 'stop', liters: t.thresholds.lowStopLiters, label: 'Livello minimo' },
+      { key: 'toofull', liters: t.thresholds.tooFullLiters, short: 'Max', label: 'Sensore troppo pieno' },
+      { key: 'fill', liters: t.thresholds.fillLiters, short: 'Pieno', label: 'Soglia pieno' },
+      { key: 'warn', liters: t.thresholds.lowWarningLiters, short: 'Basso', label: 'Livello basso' },
+      { key: 'stop', liters: t.thresholds.lowStopLiters, short: 'Min', label: 'Livello minimo' },
     ];
     return marks
-      .filter((m): m is { key: string; liters: number; label: string } => m.liters !== null)
-      .map((m) => ({ key: m.key, pos: (m.liters / t.capacityLiters) * 100, title: `${m.label} ${m.liters} l` }));
+      .filter((m): m is (typeof marks)[number] & { liters: number } => m.liters !== null)
+      .map((m) => ({
+        key: m.key,
+        short: m.short,
+        pos: (m.liters / t.capacityLiters) * 100,
+        title: `${m.label}: ${m.liters.toLocaleString('it-IT')} l`,
+      }));
   });
 
   protected readonly ticks = [100, 75, 50, 25, 0];

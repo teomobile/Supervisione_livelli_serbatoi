@@ -1,8 +1,8 @@
 import { tankCondition, tankNote } from './tank-state';
 import { TankStatus, TankThresholds } from './tank.models';
 
-const NO_THRESHOLDS: TankThresholds = { fillLiters: null, lowWarningLiters: null, lowStopLiters: null };
-const WITH_THRESHOLDS: TankThresholds = { fillLiters: 8500, lowWarningLiters: 2000, lowStopLiters: 1000 };
+const NO_THRESHOLDS: TankThresholds = { fillLiters: null, tooFullLiters: null, lowWarningLiters: null, lowStopLiters: null };
+const WITH_THRESHOLDS: TankThresholds = { fillLiters: 8500, tooFullLiters: 9350, lowWarningLiters: 2000, lowStopLiters: 1000 };
 
 function tank(overrides: Partial<TankStatus>): TankStatus {
   return {

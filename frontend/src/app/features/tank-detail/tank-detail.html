@@ -24,6 +24,9 @@
             </dd>
             <dt>Percentuale</dt><dd>{{ t.levelPercent !== null ? (t.levelPercent | number: '1.1-1') + ' %' : '—' }}</dd>
             <dt>Capacità</dt><dd>{{ t.capacityLiters | number: '1.0-0' }} l</dd>
+            @if (t.thresholds.tooFullLiters !== null) {
+              <dt>Troppo pieno</dt><dd>{{ t.thresholds.tooFullLiters | number: '1.0-0' }} l</dd>
+            }
             @if (t.thresholds.fillLiters !== null) {
               <dt>Soglia pieno</dt><dd>{{ t.thresholds.fillLiters | number: '1.0-0' }} l</dd>
             }

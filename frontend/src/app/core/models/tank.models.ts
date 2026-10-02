@@ -5,12 +5,15 @@ export type TankCode = (typeof TANK_CODES)[number];
 export type ZoneCode = 'AB' | 'CD' | 'EF' | 'GH';
 
 /**
- * Soglie in litri. Oggi il DB4 espone solo i bit (X_Full, X_TooFull), non i valori:
+ * Soglie in litri. Il DB4 espone solo i bit (X_Full, X_TooFull), non i valori:
+ * il backend li legge dalla propria configurazione.
  * null = soglia non disponibile, non viene disegnata né usata per gli allarmi.
  */
 export interface TankThresholds {
   /** Soglia di pieno usata dal PLC per X_Full. */
   fillLiters: number | null;
+  /** Quota di installazione del sensore di troppo pieno (X_TooFull). */
+  tooFullLiters: number | null;
   /** Livello basso: preavviso (non ancora presente nel DB4). */
   lowWarningLiters: number | null;
   /** Livello minimo: stop prelievo (non ancora presente nel DB4). */

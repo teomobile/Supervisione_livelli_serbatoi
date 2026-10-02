@@ -88,7 +88,8 @@ I tipi sono definiti in `src/app/core/models/tank.models.ts`. Corrispondenza con
 
 La capacità non è nel DB4: la fornisce il backend da configurazione (oggi 10.000 l per serbatoio).
 
-Le soglie (`thresholds`) sono tutte facoltative (`null`). Oggi il DB4 espone solo i bit
+Le soglie (`thresholds`) sono tutte facoltative (`null`). Il DB4 espone solo i bit
 `X_Full`/`X_TooFull`/`X_TooFullFault`, non i valori: il colore del serbatoio dipende solo da questi bit
-e dalla validità della misura. Le linee di soglia e gli allarmi di livello basso/minimo compaiono
-solo quando il backend restituisce un valore.
+e dalla validità della misura. I valori di `fillLiters` (soglia di pieno del PLC) e `tooFullLiters`
+(quota del sensore di troppo pieno) li fornisce il backend dalla propria configurazione e servono solo
+a disegnare le linee. Linee, righe e allarmi di livello basso/minimo compaiono solo se il valore c'è.

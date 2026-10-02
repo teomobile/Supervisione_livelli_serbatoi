@@ -12,3 +12,10 @@
     <span class="invalid-label">N.V.</span>
   }
 </div>
+@if (marks().length) {
+  <div class="mark-labels">
+    @for (m of marks(); track m.key) {
+      <span class="mark-label" [class]="m.key" [style.bottom.%]="m.pos" [title]="m.title">{{ m.short }}</span>
+    }
+  </div>
+}
