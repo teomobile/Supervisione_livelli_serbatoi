@@ -76,7 +76,20 @@ export interface TankHistory {
   samples: LevelSample[];
 }
 
-export type AlarmKind = 'TOO_FULL' | 'TOO_FULL_FAULT' | 'LEVEL_INVALID' | 'LOW_WARNING' | 'LOW_STOP' | 'PLC_COMM';
+/**
+ * Dal DB_Gestionale: TOO_FULL (X_TooFull), FULL (X_Full), TOO_FULL_FAULT (X_TooFullFault),
+ * LEVEL_INVALID (X_LevelValid = 0), PLC_NOT_READY (PLCReady = 0), PLC_COMM (Heartbeat fermo).
+ * LOW_WARNING / LOW_STOP: predisposti, il PLC non li fornisce ancora.
+ */
+export type AlarmKind =
+  | 'TOO_FULL'
+  | 'FULL'
+  | 'TOO_FULL_FAULT'
+  | 'LEVEL_INVALID'
+  | 'LOW_WARNING'
+  | 'LOW_STOP'
+  | 'PLC_NOT_READY'
+  | 'PLC_COMM';
 
 export interface AlarmEvent {
   id: number;
@@ -97,10 +110,12 @@ export const ZONE_LABELS: Record<ZoneCode, string> = {
 
 export const ALARM_LABELS: Record<AlarmKind, string> = {
   TOO_FULL: 'Troppo pieno',
+  FULL: 'Pieno',
   TOO_FULL_FAULT: 'Guasto sensore max',
   LEVEL_INVALID: 'Misura non valida',
   LOW_WARNING: 'Livello basso',
   LOW_STOP: 'Livello minimo',
+  PLC_NOT_READY: 'PLC non pronto',
   PLC_COMM: 'Comunicazione PLC',
 };
 
@@ -110,7 +125,9 @@ export type AlarmSeverity = 'alarm' | 'warning';
 export const ALARM_SEVERITY: Record<AlarmKind, AlarmSeverity> = {
   TOO_FULL: 'alarm',
   LOW_STOP: 'alarm',
+  PLC_NOT_READY: 'alarm',
   PLC_COMM: 'alarm',
+  FULL: 'warning',
   TOO_FULL_FAULT: 'warning',
   LEVEL_INVALID: 'warning',
   LOW_WARNING: 'warning',

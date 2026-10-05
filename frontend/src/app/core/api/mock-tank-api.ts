@@ -125,9 +125,11 @@ export class MockTankApi extends TankApi {
     const ago = (minutes: number) => new Date(now - minutes * 60_000).toISOString();
     const all: AlarmEvent[] = [
       { id: 11, kind: 'LEVEL_INVALID', tankCode: 'E', message: 'Misura radar serbatoio E non valida', raisedAt: ago(25), clearedAt: null },
+      { id: 12, kind: 'FULL', tankCode: 'G', message: 'Serbatoio G: pieno', raisedAt: ago(95), clearedAt: ago(60) },
       { id: 10, kind: 'TOO_FULL', tankCode: 'F', message: 'Serbatoio F livello massimo raggiunto', raisedAt: ago(180), clearedAt: ago(171) },
       { id: 9, kind: 'TOO_FULL', tankCode: 'G', message: 'Serbatoio G livello massimo raggiunto', raisedAt: ago(320), clearedAt: ago(312) },
       { id: 8, kind: 'PLC_COMM', tankCode: null, message: 'Comunicazione PLC interrotta', raisedAt: ago(1500), clearedAt: ago(1493) },
+      { id: 3, kind: 'PLC_NOT_READY', tankCode: null, message: 'PLC non pronto', raisedAt: ago(1510), clearedAt: ago(1490) },
       { id: 7, kind: 'TOO_FULL_FAULT', tankCode: 'D', message: 'Anomalia sensore massimo livello serbatoio D', raisedAt: ago(2900), clearedAt: ago(2650) },
       { id: 6, kind: 'LEVEL_INVALID', tankCode: 'H', message: 'Misura radar serbatoio H non valida', raisedAt: ago(3100), clearedAt: ago(3085) },
       { id: 5, kind: 'TOO_FULL', tankCode: 'B', message: 'Serbatoio B livello massimo raggiunto', raisedAt: ago(4400), clearedAt: ago(4392) },
