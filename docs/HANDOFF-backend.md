@@ -329,8 +329,13 @@ Requisiti lato PLC e rete:
 - il server del backend deve raggiungere **10.229.48.92 sulla porta TCP 102**;
 - S7-1200: rack 0, slot 1 (in configurazione).
 
-Libreria proposta: **S7netplus** (pacchetto NuGet `S7netplus`). Se il `PlcService` esistente usa
-un'altra libreria S7 (es. Sharp7), si può usare quella: cambia solo la classe che legge i byte.
+Libreria: **S7netplus**, già usata dal `PlcService` esistente (nessun pacchetto nuovo). Il servizio
+serbatoi crea **un proprio oggetto `Plc`** verso 10.229.48.92: non condivide l'istanza del `PlcService`,
+che punta a un altro PLC e non va toccata (un oggetto `Plc` di S7netplus non va usato da più thread).
+
+La bozza usa `OpenAsync`, `ReadBytesAsync` con `CancellationToken` e le proprietà `ReadTimeout` /
+`WriteTimeout`: verificare che ci siano nella versione di S7netplus del progetto; nelle versioni più
+vecchie si usano i metodi sincroni `Open()` / `ReadBytes(...)` dentro `Task.Run`.
 
 Una lettura = **55 byte** del DB4 (offset 0–54), poi si decodificano. Tutti i valori S7 sono big-endian:
 
@@ -1178,7 +1183,7 @@ Il `TanksController` di §7.7 usa `ServiceBackend.Tanks.TankDal` (aggiungere `us
 
 ### 7.9 Registrazione in `Program.cs` e `appsettings.json`
 
-Pacchetto NuGet: `S7netplus` (se non si usa la libreria del `PlcService` esistente, §7.2).
+Pacchetto NuGet: `S7netplus`, già presente nel progetto.
 
 ```csharp
 using ServiceBackend.Tanks;
@@ -1399,13 +1404,12 @@ Da chiarire per il backend:
 
 1. **Accesso S7 al PLC 10.229.48.92**: PUT/GET abilitato sul 1214C; porta TCP 102 raggiungibile dal
    server del backend (firewall / reti separate).
-2. **Libreria S7**: confermare S7netplus o usare quella del `PlcService` esistente (§7.2).
-3. **Ogni quanto il PLC incrementa `Heartbeat`**: determina `HeartbeatTimeoutSec` (oggi 20 s).
-4. **Application pool sempre attivo** su IIS, una sola istanza (§7.10).
-5. **Casing del JSON** del backend (camelCase atteso).
+2. **Ogni quanto il PLC incrementa `Heartbeat`**: determina `HeartbeatTimeoutSec` (oggi 20 s).
+3. **Application pool sempre attivo** su IIS, una sola istanza (§7.10).
+4. **Casing del JSON** del backend (camelCase atteso).
 
 Già chiariti: tabella `LivelliSerbatoi` una riga al minuto (potrà variare); `DataOra` = ora locale del
-server SQL; eventi di allarme scritti dal backend.
+server SQL; eventi di allarme scritti dal backend; libreria S7netplus (già nel progetto).
 
 Da chiudere con il softwarista PLC (documento "Punti aperti PLC – Supervisione serbatoi",
 https://claude.ai/code/artifact/9e2b08a4-2986-4d84-9e1e-e35eda396f5e):
@@ -1466,7 +1470,7 @@ Altri:
 - [ ] Abilitare PUT/GET sul PLC 10.229.48.92 e verificare la porta 102 dal server del backend (§7.2)
 - [ ] Creare `SupTankConfig` (con i valori iniziali) e `SupTankEvent` (§7.4, §7.5)
 - [ ] Creare l'indice su `DataOra` di `LivelliSerbatoi`; `HeartBeat` a `bigint` (§7.11, §5.2)
-- [ ] Aggiungere pacchetto S7, DTO, classi `ServiceBackend.Tanks`, `TanksController`, registrazione e sezioni `TankPlc`/`Tanks` in `appsettings.json` (§7.6–7.9)
+- [ ] Aggiungere DTO, classi `ServiceBackend.Tanks`, `TanksController`, registrazione e sezioni `TankPlc`/`Tanks` in `appsettings.json` (§7.6–7.9)
 - [ ] Application pool sempre attivo, una sola istanza (§7.10)
 - [ ] Verificare camelCase e date con fuso nelle risposte
 - [ ] Provare ogni endpoint da Swagger, poi con il frontend (`useMock: false`)
