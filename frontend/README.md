@@ -88,6 +88,10 @@ I tipi sono definiti in `src/app/core/models/tank.models.ts`. Corrispondenza con
 | `X_TooFullFault` | `tooFullFault` |
 | `Horn_AB` … `Horn_GH` | `SystemStatus.horns` |
 
+Il backend legge questi valori dalla tabella SQL `dana_verniciatura.dbo.LivelliSerbatoi`, scritta da
+System Platform. La tabella oggi **non ha** le colonne `X_TooFullFault`: finché non vengono aggiunte,
+`tooFullFault` arriva sempre `false`. Dettagli in `docs/HANDOFF-backend.md`.
+
 La capacità non è nel DB4: la fornisce il backend da configurazione (oggi 10.000 l per serbatoio).
 
 Le soglie (`thresholds`) sono tutte facoltative (`null`). Il DB4 espone solo i bit
