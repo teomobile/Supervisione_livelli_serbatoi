@@ -122,7 +122,9 @@ servono solo a disegnare le linee.
 |---|---|---|
 | `TOO_FULL` | Troppo pieno | Allarme |
 | `LOW_STOP` | Livello minimo | Allarme |
+| `PLC_NOT_READY` | PLC non pronto (`PLCReady = 0`) | Allarme |
 | `PLC_COMM` | Comunicazione PLC | Allarme |
+| `FULL` | Pieno (`X_Full`) | Avviso |
 | `TOO_FULL_FAULT` | Guasto sensore max | Avviso |
 | `LEVEL_INVALID` | Misura non valida | Avviso |
 | `LOW_WARNING` | Livello basso | Avviso |
@@ -189,7 +191,7 @@ interface SystemStatus { plc: PlcStatus; tanks: TankStatus[]; horns: ZoneHorn[];
 interface LevelSample { timestamp: string; levelLiters: number | null; levelPercent: number | null; }
 interface TankHistory { code: TankCode; capacityLiters: number; thresholds: TankThresholds; samples: LevelSample[]; }
 
-type AlarmKind = 'TOO_FULL'|'TOO_FULL_FAULT'|'LEVEL_INVALID'|'LOW_WARNING'|'LOW_STOP'|'PLC_COMM';
+type AlarmKind = 'TOO_FULL'|'FULL'|'TOO_FULL_FAULT'|'LEVEL_INVALID'|'LOW_WARNING'|'LOW_STOP'|'PLC_NOT_READY'|'PLC_COMM';
 interface AlarmEvent { id: number; kind: AlarmKind; tankCode: TankCode | null; message: string;
                        raisedAt: string; clearedAt: string | null; }   // clearedAt null = attivo
 
@@ -355,10 +357,10 @@ WITH s AS (
     FROM dbo.LivelliSerbatoi t
     CROSS APPLY (VALUES
         ('A', 'TOO_FULL',      CASE WHEN t.A_TooFull = 1    THEN 1 ELSE 0 END),
+        ('A', 'FULL',          CASE WHEN t.A_Full = 1       THEN 1 ELSE 0 END),
         ('A', 'LEVEL_INVALID', CASE WHEN t.A_LevelValid = 0 THEN 1 ELSE 0 END),
-        ('B', 'TOO_FULL',      CASE WHEN t.B_TooFull = 1    THEN 1 ELSE 0 END),
-        ('B', 'LEVEL_INVALID', CASE WHEN t.B_LevelValid = 0 THEN 1 ELSE 0 END)
-        -- ... C-H; con le colonne X_TooFullFault anche ('X', 'TOO_FULL_FAULT', ...)
+        -- ... B-H; con le colonne X_TooFullFault anche ('X', 'TOO_FULL_FAULT', ...)
+        ('',  'PLC_NOT_READY', CASE WHEN t.PlcReady = 0     THEN 1 ELSE 0 END)   -- '' = non legato a un serbatoio
     ) v (Code, Kind, Active)
     WHERE t.DataOra >= @fromLocal AND t.DataOra < @toLocal
 ),
@@ -392,6 +394,7 @@ WHERE Id <= @lastId
                   @lastId - @lookbackRows - 1);
 ```
 
+`PLC_NOT_READY` segue lo stesso schema sulla colonna `PlcReady` (attivo quando vale 0).
 `PLC_COMM` attivo = heartbeat fermo da più di 20 s (stesso calcolo dello stato). Nello storico
 `PLC_COMM` non viene ricostruito: richiederebbe di cercare i buchi dell'heartbeat su tutto il periodo.
 
@@ -529,8 +532,8 @@ namespace ServiceBackend.Model.Tanks
     public class AlarmEventDto
     {
         public long Id { get; set; }
-        public string Kind { get; set; } = "";          // "TOO_FULL", "TOO_FULL_FAULT", ...
-        public string? TankCode { get; set; }            // null per PLC_COMM
+        public string Kind { get; set; } = "";          // "TOO_FULL", "FULL", "LEVEL_INVALID", "PLC_NOT_READY", ...
+        public string? TankCode { get; set; }            // null per PLC_COMM e PLC_NOT_READY
         public string Message { get; set; } = "";
         public DateTimeOffset RaisedAt { get; set; }
         public DateTimeOffset? ClearedAt { get; set; }   // null = attivo
@@ -846,23 +849,33 @@ namespace ServiceBackend.Model
 
         // ---------- allarmi ----------
 
-        /// <summary>Condizione di allarme: colonna "{X}_{Column}" attiva quando vale ActiveWhen.</summary>
+        /// <summary>
+        /// Condizione di allarme: colonna "{X}_{Column}" (o "{Column}" se non legata a un serbatoio)
+        /// attiva quando vale ActiveWhen.
+        /// </summary>
         private sealed record Condition(string Kind, string Column, bool ActiveWhen, string Text)
         {
-            public string Col(string code) => $"{code}_{Column}";
-            public string ActiveSql(string code) => $"{Col(code)} = {(ActiveWhen ? 1 : 0)}";
+            public string Col(string? code) => code == null ? Column : $"{code}_{Column}";
+            public string ActiveSql(string? code) => $"{Col(code)} = {(ActiveWhen ? 1 : 0)}";
             // NULL = dato mancante: non apre e non tiene aperto un evento.
-            public string InactiveSql(string code) => $"ISNULL({Col(code)}, {(ActiveWhen ? 0 : 1)}) = {(ActiveWhen ? 0 : 1)}";
-            public bool IsActive(Dictionary<string, object?> r, string code) =>
+            public string InactiveSql(string? code) => $"ISNULL({Col(code)}, {(ActiveWhen ? 0 : 1)}) = {(ActiveWhen ? 0 : 1)}";
+            public bool IsActive(Dictionary<string, object?> r, string? code) =>
                 r.TryGetValue(Col(code), out var v) && v is bool b && b == ActiveWhen;
         }
 
         private static readonly Condition[] Conditions =
         {
             new("TOO_FULL", "TooFull", true, "Serbatoio {1}: livello massimo raggiunto"),
+            new("FULL", "Full", true, "Serbatoio {1}: pieno"),
             new("LEVEL_INVALID", "LevelValid", false, "Serbatoio {1}: misura radar non valida"),
             // Dopo l'ALTER TABLE di §5.2 aggiungere:
             // new("TOO_FULL_FAULT", "TooFullFault", true, "Serbatoio {1}: anomalia sensore di massimo livello"),
+        };
+
+        /// <summary>Condizioni non legate a un serbatoio (tankCode = null).</summary>
+        private static readonly Condition[] PlcConditions =
+        {
+            new("PLC_NOT_READY", "PlcReady", false, "PLC non pronto"),
         };
 
         public async Task<List<AlarmEventDto>> GetAlarmsAsync(bool activeOnly, DateTimeOffset? from, DateTimeOffset? to, string? code)
@@ -874,7 +887,7 @@ namespace ServiceBackend.Model
 
             return activeOnly
                 ? await ActiveAlarmsAsync(cn, codes, names, includePlc: code == null)
-                : await HistoryAlarmsAsync(cn, codes, names, from ?? DateTimeOffset.UtcNow.AddDays(-7), to ?? DateTimeOffset.UtcNow);
+                : await HistoryAlarmsAsync(cn, codes, names, from ?? DateTimeOffset.UtcNow.AddDays(-7), to ?? DateTimeOffset.UtcNow, includePlc: code == null);
         }
 
         private async Task<List<AlarmEventDto>> ActiveAlarmsAsync(SqlConnection cn, string[] codes, Dictionary<string, string> names, bool includePlc)
@@ -901,6 +914,22 @@ namespace ServiceBackend.Model
                 }
             }
 
+            if (includePlc)
+            {
+                foreach (var cond in PlcConditions.Where(c => c.IsActive(snap.Row, null)))
+                {
+                    var start = await cn.ExecuteScalarAsync<DateTime?>($@"
+                        SELECT MIN(DataOra) FROM dbo.LivelliSerbatoi
+                        WHERE Id <= @lastId
+                          AND Id > ISNULL((SELECT TOP (1) Id FROM dbo.LivelliSerbatoi
+                                           WHERE Id <= @lastId AND Id >= @lastId - @lookback
+                                             AND {cond.InactiveSql(null)}
+                                           ORDER BY Id DESC), @lastId - @lookback - 1)",
+                        new { lastId = snap.LastId, lookback = _lookbackRows });
+                    result.Add(NewEvent(cond.Kind, null, cond.Text, start.HasValue ? ToUtc(start.Value) : snap.Timestamp, null));
+                }
+            }
+
             if (includePlc && (snap.DbNow - snap.HeartbeatChangedAt).TotalSeconds > _heartbeatTimeoutSec)
             {
                 result.Add(NewEvent("PLC_COMM", null, "Comunicazione PLC interrotta", snap.HeartbeatChangedAt, null));
@@ -917,11 +946,16 @@ namespace ServiceBackend.Model
         }
 
         private async Task<List<AlarmEventDto>> HistoryAlarmsAsync(SqlConnection cn, string[] codes, Dictionary<string, string> names,
-                                                                    DateTimeOffset from, DateTimeOffset to)
+                                                                    DateTimeOffset from, DateTimeOffset to, bool includePlc)
         {
             // Una riga di VALUES per serbatoio e condizione; i codici sono lettere A-H validate.
-            var values = string.Join(",\n", codes.SelectMany(c => Conditions.Select(cond =>
-                $"('{c}', '{cond.Kind}', CASE WHEN t.{cond.ActiveSql(c)} THEN 1 ELSE 0 END)")));
+            // Le condizioni del PLC usano il codice '' (diventa tankCode = null).
+            var rowsSql = codes.SelectMany(c => Conditions.Select(cond =>
+                    $"('{c}', '{cond.Kind}', CASE WHEN t.{cond.ActiveSql(c)} THEN 1 ELSE 0 END)"))
+                .Concat(includePlc
+                    ? PlcConditions.Select(cond => $"('', '{cond.Kind}', CASE WHEN t.{cond.ActiveSql(null)} THEN 1 ELSE 0 END)")
+                    : Enumerable.Empty<string>());
+            var values = string.Join(",\n", rowsSql);
 
             var edges = await cn.QueryAsync<EdgeRow>($@"
                 WITH s AS (
@@ -941,19 +975,21 @@ namespace ServiceBackend.Model
             var result = new List<AlarmEventDto>();
             foreach (var group in edges.GroupBy(e => (e.Code, e.Kind)))
             {
-                var text = Conditions.First(c => c.Kind == group.Key.Kind).Text;
+                string? tank = group.Key.Code == "" ? null : group.Key.Code;
+                var text = Conditions.Concat(PlcConditions).First(c => c.Kind == group.Key.Kind).Text;
+                string Message() => tank == null ? text : string.Format(text, tank, names[tank]);
                 DateTimeOffset? raised = null;
                 foreach (var edge in group)
                 {
                     if (edge.Active == 1) { raised = ToUtc(edge.DataOra); continue; }
                     if (raised.HasValue)
                     {
-                        result.Add(NewEvent(group.Key.Kind, group.Key.Code, string.Format(text, group.Key.Code, names[group.Key.Code]), raised.Value, ToUtc(edge.DataOra)));
+                        result.Add(NewEvent(group.Key.Kind, tank, Message(), raised.Value, ToUtc(edge.DataOra)));
                         raised = null;
                     }
                 }
                 if (raised.HasValue)
-                    result.Add(NewEvent(group.Key.Kind, group.Key.Code, string.Format(text, group.Key.Code, names[group.Key.Code]), raised.Value, null));
+                    result.Add(NewEvent(group.Key.Kind, tank, Message(), raised.Value, null));
             }
             return result.OrderByDescending(e => e.RaisedAt).ToList();
         }
@@ -961,7 +997,7 @@ namespace ServiceBackend.Model
         private static AlarmEventDto NewEvent(string kind, string? code, string message, DateTimeOffset raised, DateTimeOffset? cleared) => new()
         {
             // Id stabile tra una chiamata e l'altra: istante di inizio + serbatoio + tipo.
-            Id = raised.ToUnixTimeSeconds() * 1000 + (code == null ? 999 : Array.IndexOf(Codes, code) * 10 + KindIndex(kind)),
+            Id = raised.ToUnixTimeSeconds() * 1000 + (code == null ? 900 : Array.IndexOf(Codes, code) * 10) + KindIndex(kind),
             Kind = kind,
             TankCode = code,
             Message = message,
@@ -971,7 +1007,8 @@ namespace ServiceBackend.Model
 
         private static int KindIndex(string kind) => kind switch
         {
-            "TOO_FULL" => 1, "LEVEL_INVALID" => 2, "TOO_FULL_FAULT" => 3, _ => 9,
+            "TOO_FULL" => 1, "FULL" => 2, "LEVEL_INVALID" => 3, "TOO_FULL_FAULT" => 4,
+            "PLC_NOT_READY" => 5, "PLC_COMM" => 6, _ => 9,
         };
 
         // ---------- configurazione ----------
@@ -1042,6 +1079,8 @@ Note sulla bozza:
 - `GetSystemStatus` e `GetAlarms?activeOnly=true` sono chiamati ogni 5 s **da ogni browser aperto**.
   Con più postazioni conviene una cache di 2–3 s (`IMemoryCache`) sul risultato.
 - Un valore NULL non apre né tiene aperto un evento (`IsActive`, `InactiveSql`): conta come dato mancante.
+- `FULL` è uno stato normale per i serbatoi di stoccaggio: se G e H restano pieni, l'avviso resta
+  attivo a lungo e il contatore in barra resta giallo. Da valutare con gli operatori se tenerlo tra gli avvisi.
 - `ToUtc` su un'ora del cambio ora legale → solare (02:00–03:00 dell'ultima domenica di ottobre) sceglie
   l'ora solare: per un'ora all'anno gli eventi possono risultare spostati di 60 minuti.
 
