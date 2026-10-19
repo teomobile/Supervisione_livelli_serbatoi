@@ -1211,9 +1211,9 @@ builder.Services.AddScoped<TankDal>();
 }
 ```
 
-- `HeartbeatTimeoutSec` deve coincidere con `heartbeatTimeoutSec` del `config.json` del frontend (20)
-  e va scelto in base a **ogni quanto il PLC incrementa l'heartbeat** (punto aperto col softwarista):
-  almeno 3 volte quel periodo.
+- `HeartbeatTimeoutSec` deve coincidere con `heartbeatTimeoutSec` del `config.json` del frontend (20).
+  Il PLC incrementa l'heartbeat **ogni 5 s**: 20 s = 4 incrementi mancati prima di segnalare
+  "Com. persa". Se il periodo del PLC cambia, tenere il timeout ad almeno 3 volte il periodo.
 - `SourceTimeZone`: fuso di `DataOra` in `LivelliSerbatoi` (nome Windows; su Linux `Europe/Rome`).
 
 ### 7.10 IIS: applicazione sempre attiva
@@ -1404,12 +1404,12 @@ Da chiarire per il backend:
 
 1. **Accesso S7 al PLC 10.229.48.92**: PUT/GET abilitato sul 1214C; porta TCP 102 raggiungibile dal
    server del backend (firewall / reti separate).
-2. **Ogni quanto il PLC incrementa `Heartbeat`**: determina `HeartbeatTimeoutSec` (oggi 20 s).
-3. **Application pool sempre attivo** su IIS, una sola istanza (§7.10).
-4. **Casing del JSON** del backend (camelCase atteso).
+2. **Application pool sempre attivo** su IIS, una sola istanza (§7.10).
+3. **Casing del JSON** del backend (camelCase atteso).
 
 Già chiariti: tabella `LivelliSerbatoi` una riga al minuto (potrà variare); `DataOra` = ora locale del
-server SQL; eventi di allarme scritti dal backend; libreria S7netplus (già nel progetto).
+server SQL; eventi di allarme scritti dal backend; libreria S7netplus (già nel progetto); `Heartbeat` incrementato
+ogni 5 s (timeout 20 s = 4 incrementi mancati).
 
 Da chiudere con il softwarista PLC (documento "Punti aperti PLC – Supervisione serbatoi",
 https://claude.ai/code/artifact/9e2b08a4-2986-4d84-9e1e-e35eda396f5e):
