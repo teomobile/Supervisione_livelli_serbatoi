@@ -28,7 +28,7 @@ senza ricompilare.
 | `useMock` | `true` = dati simulati, nessuna chiamata al backend |
 | `pollingIntervalMs` | intervallo di aggiornamento del sinottico |
 | `staleDataAfterSec` | oltre questa età l'ultimo dato è segnalato come non aggiornato |
-| `heartbeatTimeoutSec` | se l'heartbeat PLC non cambia entro questo tempo: "Com. persa" |
+| `heartbeatTimeoutSec` | se l'heartbeat PLC non cambia entro questo tempo: "Com. persa". Circa 3 × l'intervallo di scrittura della tabella (1 min → 180 s) |
 
 ## Struttura
 

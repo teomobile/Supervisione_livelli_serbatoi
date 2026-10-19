@@ -3,5 +3,5 @@
   "useMock": true,
   "pollingIntervalMs": 5000,
   "staleDataAfterSec": 30,
-  "heartbeatTimeoutSec": 20
+  "heartbeatTimeoutSec": 180
 }

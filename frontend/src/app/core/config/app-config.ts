@@ -14,7 +14,10 @@ export interface AppConfig {
   pollingIntervalMs: number;
   /** Oltre questa età l'ultimo dato ricevuto viene segnalato come non aggiornato. */
   staleDataAfterSec: number;
-  /** Se l'heartbeat PLC non cambia entro questo tempo la comunicazione è considerata persa. */
+  /**
+   * Se l'heartbeat PLC non cambia entro questo tempo la comunicazione è considerata persa.
+   * Va tenuto a circa 3 volte l'intervallo di scrittura della tabella LivelliSerbatoi (oggi 1 minuto).
+   */
   heartbeatTimeoutSec: number;
 }
 
@@ -23,7 +26,7 @@ const DEFAULTS: AppConfig = {
   useMock: false,
   pollingIntervalMs: 5000,
   staleDataAfterSec: 30,
-  heartbeatTimeoutSec: 20,
+  heartbeatTimeoutSec: 180,
 };
 
 @Injectable({ providedIn: 'root' })

@@ -80,7 +80,7 @@ Avvio: `cd frontend && npm install && npm start` → http://localhost:4200. Usar
   "useMock": true,
   "pollingIntervalMs": 5000,
   "staleDataAfterSec": 30,
-  "heartbeatTimeoutSec": 20
+  "heartbeatTimeoutSec": 180
 }
 ```
 
@@ -202,7 +202,7 @@ interface TankConfig { code: TankCode; name: string; capacityLiters: number;
 Dettagli che contano:
 
 - `heartbeatChangedAt` + `serverTime`: il frontend calcola l'età dell'heartbeat **sull'ora del
-  server** (non del PC client). Oltre `heartbeatTimeoutSec` (20 s) mostra "Com. persa".
+  server** (non del PC client). Oltre `heartbeatTimeoutSec` (180 s) mostra "Com. persa".
 - `levelLiters = levelPercent × capacityLiters / 100`, capacità dalla configurazione.
 - `thresholds.fillLiters = capacity × fullPercent / 100`; `tooFullLiters = capacity × tooFullPercent / 100`.
 - Storico: circa **600 punti** per intervallo (il frontend non ricampiona). Campioni con misura non
@@ -240,7 +240,7 @@ System Platform scrive **una riga per campionamento** con tutti i valori del DB4
 | Colonna | Tipo | Origine DB4 | Campo DTO |
 |---|---|---|---|
 | `Id` | bigint identity, PK clustered | — | ordine delle righe |
-| `DataOra` | datetime, default `getdate()` | — | `timestamp` (ora **locale** del server SQL, senza fuso) |
+| `DataOra` | datetime, default `getdate()` | — | `timestamp` (ora **locale** del server SQL, senza fuso; confermato) |
 | `DataVersion` | int | `DataVersion` | `plc.dataVersion` |
 | `PlcReady` | bit | `PLCReady` | `plc.plcReady` |
 | `HeartBeat` | int | `Heartbeat` (UDInt) | `plc.heartbeat`, `plc.heartbeatChangedAt` |
@@ -260,7 +260,7 @@ Differenze rispetto al DB4 e conseguenze:
 | `DataOra` in ora locale, tipo `datetime` | conversione in UTC nel backend; l'ora doppia del cambio da ora legale a solare è ambigua | conversione con `TimeZoneInfo` (§7.7); in futuro `datetime2` in UTC o `datetimeoffset` |
 | `HeartBeat` int, nel PLC UDInt | oltre 2.147.483.647 l'inserimento fallisce o il valore diventa negativo | portare a `bigint` |
 | Nessun indice su `DataOra` | storico e allarmi su 30 giorni leggono tutta la tabella | indice su `DataOra` (§7.8) |
-| Frequenza di scrittura **non nota** | determina volume della tabella e tempi delle query | da chiedere a chi configura System Platform |
+| Una riga **al minuto** (potrà variare) | il supervisore vede i dati con fino a ~1 min di ritardo; eventi più brevi di un intervallo possono non essere registrati; inizio e fine degli eventi hanno una precisione di ±1 min | i parametri che dipendono dall'intervallo sono in configurazione (§7.6) |
 | `Horn_Ef` scritto in minuscolo | nessun effetto in SQL; nel codice leggere le colonne senza distinzione maiuscole/minuscole | — |
 
 ```sql
@@ -395,7 +395,7 @@ WHERE Id <= @lastId
 ```
 
 `PLC_NOT_READY` segue lo stesso schema sulla colonna `PlcReady` (attivo quando vale 0).
-`PLC_COMM` attivo = heartbeat fermo da più di 20 s (stesso calcolo dello stato). Nello storico
+`PLC_COMM` attivo = heartbeat fermo oltre `HeartbeatTimeoutSec` (stesso calcolo dello stato). Nello storico
 `PLC_COMM` non viene ricostruito: richiederebbe di cercare i buchi dell'heartbeat su tutto il periodo.
 
 <!--
@@ -644,15 +644,17 @@ builder.Services.AddScoped<TankDal>();   // dipende da IConfiguration, ILogger<T
 "Tanks": {
   "SourceTimeZone": "W. Europe Standard Time",
   "LookbackRows": 20000,
-  "HeartbeatTimeoutSec": 20
+  "HeartbeatTimeoutSec": 180
 }
 ```
 
 - `SourceTimeZone`: fuso di `DataOra` (nome Windows; su Linux sarebbe `Europe/Rome`).
 - `LookbackRows`: quante righe indietro cercare l'inizio di un evento o l'ultimo cambio
-  dell'heartbeat. Va dimensionato sulla frequenza di scrittura: con una riga al secondo, 20.000 righe
-  ≈ 5,5 ore. Un evento più lungo risulta iniziato all'inizio della finestra.
-- `HeartbeatTimeoutSec`: deve coincidere con `heartbeatTimeoutSec` di `config.json` del frontend.
+  dell'heartbeat. Con una riga al minuto, 20.000 righe ≈ 14 giorni. Un evento più lungo risulta
+  iniziato all'inizio della finestra. Se l'intervallo di scrittura cambia, ridimensionare.
+- `HeartbeatTimeoutSec`: circa **3 volte l'intervallo di scrittura** (1 min → 180 s). Con un valore più
+  basso dell'intervallo il supervisore segnala "Com. persa" tra una riga e l'altra anche con tutto
+  funzionante. Deve coincidere con `heartbeatTimeoutSec` di `config.json` del frontend (già 180).
 
 ### 7.7 `TankDal` (bozza)
 
@@ -696,7 +698,7 @@ namespace ServiceBackend.Model
                 ?? throw new InvalidOperationException("Stringa di connessione 'DanaBackendEntities' mancante");
             _sourceZone = TimeZoneInfo.FindSystemTimeZoneById(config["Tanks:SourceTimeZone"] ?? "W. Europe Standard Time");
             _lookbackRows = config.GetValue("Tanks:LookbackRows", 20000);
-            _heartbeatTimeoutSec = config.GetValue("Tanks:HeartbeatTimeoutSec", 20);
+            _heartbeatTimeoutSec = config.GetValue("Tanks:HeartbeatTimeoutSec", 180);
             _logger = logger;
         }
 
@@ -1092,10 +1094,13 @@ CREATE NONCLUSTERED INDEX IX_LivelliSerbatoi_DataOra
     ON dbo.LivelliSerbatoi (DataOra);
 ```
 
-Volume indicativo: con una riga al secondo, 86.400 righe al giorno e circa 31,5 milioni all'anno.
+Volume con una riga al minuto: 1.440 righe al giorno, circa 525.000 all'anno. È poco: l'indice basta
+e le query su 30 giorni leggono circa 43.000 righe. Se l'intervallo scende a pochi secondi, i numeri
+crescono di conseguenza (una riga al secondo = 31,5 milioni all'anno).
 Da decidere con chi gestisce il database:
 
-- **frequenza di scrittura** di System Platform (determina tutto il resto);
+- eventuale cambio della **frequenza di scrittura** (oggi 1 minuto): aggiornare `LookbackRows` e
+  `HeartbeatTimeoutSec` nel backend e `heartbeatTimeoutSec` nel frontend;
 - **conservazione** (es. 2 anni) e un job SQL Agent che cancella le righe più vecchie a blocchi;
 - se lo storico a 30 giorni risulta lento: tabella di medie al minuto riempita da un job, letta dal
   backend per i periodi lunghi.
@@ -1131,11 +1136,12 @@ Queste modifiche sono **fuori dal perimetro serbatoi**: riguardano il backend OE
 
 Da chiarire per il backend (tabella `LivelliSerbatoi`):
 
-1. **Frequenza di scrittura** delle righe: dimensiona `LookbackRows`, indice e conservazione (§7.6, §7.8).
-2. **Colonne `X_TooFullFault` mancanti**: aggiungerle e farle scrivere da System Platform (§5.2).
-3. **Fuso di `DataOra`**: confermare che è l'ora locale del server SQL (default `getdate()`) e non
-   un valore scritto da System Platform con un altro orologio.
-4. **Casing del JSON** del backend (camelCase atteso).
+1. **Colonne `X_TooFullFault` mancanti** (attività, non domanda): eseguire l'`ALTER TABLE` di §5.2
+   e chiedere a chi configura System Platform di scriverci i bit `X_TooFullFault` del DB4.
+2. **Casing del JSON** del backend (camelCase atteso).
+
+Già chiariti: una riga al minuto (potrà variare, parametri in configurazione); `DataOra` = ora locale
+del server SQL (`getdate()`).
 
 Da chiudere con il softwarista PLC (documento "Punti aperti PLC – Supervisione serbatoi",
 https://claude.ai/code/artifact/9e2b08a4-2986-4d84-9e1e-e35eda396f5e):
@@ -1193,7 +1199,6 @@ Altri:
 
 ## 11. Checklist per chiudere il backend
 
-- [ ] Chiedere la frequenza di scrittura di `LivelliSerbatoi` (§9)
 - [ ] Eseguire `ALTER TABLE` per `X_TooFullFault` e `HeartBeat bigint` e farle popolare (§5.2)
 - [ ] Creare l'indice su `DataOra` (§7.8) e la tabella `SupTankConfig` con i valori iniziali (§7.3)
 - [ ] Aggiungere DTO, `TankDal`, `TanksController`, registrazione e sezione `Tanks` in `appsettings.json` (§7.4–7.7)
