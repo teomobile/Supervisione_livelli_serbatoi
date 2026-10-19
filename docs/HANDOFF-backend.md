@@ -1,7 +1,8 @@
 # Supervisione livelli serbatoi — riepilogo per completare il backend
 
 Stato al 19/10/2026. Il **frontend è completo e gira con dati simulati**; il **backend non è ancora
-scritto**. La sorgente dati è ora nota: la tabella SQL `dana_verniciatura.dbo.LivelliSerbatoi` (§5.2). Questo documento contiene tutto quello che serve per scriverlo: architettura, contratto API,
+scritto**. Sorgenti decise: dati in diretta dal **PLC 10.229.48.92 via S7**, storico dei livelli dalla
+tabella `dana_verniciatura.dbo.LivelliSerbatoi`, eventi di allarme scritti dal backend in `SupTankEvent`. Questo documento contiene tutto quello che serve per scriverlo: architettura, contratto API,
 mappatura del DB PLC, decisioni prese, codice di partenza e punti aperti.
 
 > Nessun codice C# di questo documento è stato compilato: il progetto ServiceBackend non era
@@ -23,15 +24,14 @@ Capitolato (sintesi):
 Architettura concordata:
 
 ```
-PLC S7-1200 (DB_Gestionale, DB4)
-   → System Platform (raccolta dati, "Factory Software")
-      → SQL Server, database dana_verniciatura, tabella dbo.LivelliSerbatoi (una riga per campionamento)
-         → ServiceBackend ASP.NET Core (.NET 6) — nuovo TanksController, servizi REST
-            → frontend Angular (questo repository, cartella frontend/)
+PLC S7-1200 serbatoi, 10.229.48.92 (DB_Gestionale, DB4)
+   ├─ S7, lettura ogni 1 s ─► ServiceBackend ASP.NET Core (.NET 6): stato in diretta + eventi di allarme
+   └─ System Platform ─► SQL dana_verniciatura.dbo.LivelliSerbatoi (1 riga/minuto) ─► ServiceBackend: trend
+                                    ServiceBackend ─► servizi REST (TanksController) ─► frontend Angular
 ```
 
-Il backend **legge** dalla tabella `LivelliSerbatoi`. Oggi non esiste un canale di **scrittura** verso il PLC: serve per
-soglie scritte dal supervisore, tacitazione sirene e travaso (vedi §9).
+Il backend **legge** il PLC (diretta) e la tabella `LivelliSerbatoi` (storico). La stessa connessione S7 potrà in futuro **scrivere** sul PLC (soglie,
+tacitazione sirene, travaso), dopo l'introduzione dell'autenticazione (§9).
 
 ## 2. Repository
 
@@ -202,7 +202,7 @@ interface TankConfig { code: TankCode; name: string; capacityLiters: number;
 Dettagli che contano:
 
 - `heartbeatChangedAt` + `serverTime`: il frontend calcola l'età dell'heartbeat **sull'ora del
-  server** (non del PC client). Oltre `heartbeatTimeoutSec` (180 s) mostra "Com. persa".
+  server** (non del PC client). Oltre `heartbeatTimeoutSec` (20 s) mostra "Com. persa".
 - `levelLiters = levelPercent × capacityLiters / 100`, capacità dalla configurazione.
 - `thresholds.fillLiters = capacity × fullPercent / 100`; `tooFullLiters = capacity × tooFullPercent / 100`.
 - Storico: circa **600 punti** per intervallo (il frontend non ricampiona). Campioni con misura non
@@ -233,22 +233,20 @@ DB **non ottimizzato** (offset assoluti), `DataVersion` UInt a 0.0.
 Nel DB4 **non ci sono**: valori di soglia, livello basso/minimo, comandi (tacitazione, travaso),
 stato "Rabbocco" (presente nel vecchio supervisore per il serbatoio A).
 
-### 5.2 Tabella `dana_verniciatura.dbo.LivelliSerbatoi` (sorgente del backend)
+### 5.2 Tabella `dana_verniciatura.dbo.LivelliSerbatoi` (solo storico)
 
-System Platform scrive **una riga per campionamento** con tutti i valori del DB4 (tabella "larga").
+System Platform scrive **una riga al minuto** (potrà variare) con i valori del DB4. Il backend la usa
+**solo per i trend**: stato attuale e allarmi vengono dal PLC (§7.1).
 
-| Colonna | Tipo | Origine DB4 | Campo DTO |
+| Colonna | Tipo | Origine DB4 | Uso nel backend |
 |---|---|---|---|
-| `Id` | bigint identity, PK clustered | — | ordine delle righe |
-| `DataOra` | datetime, default `getdate()` | — | `timestamp` (ora **locale** del server SQL, senza fuso; confermato) |
-| `DataVersion` | int | `DataVersion` | `plc.dataVersion` |
-| `PlcReady` | bit | `PLCReady` | `plc.plcReady` |
-| `HeartBeat` | int | `Heartbeat` (UDInt) | `plc.heartbeat`, `plc.heartbeatChangedAt` |
-| `X_LevelPercent` | float | `X_LevelPercent` | `levelPercent` (+ `levelLiters` calcolato) |
-| `X_LevelValid` | bit | `X_LevelValid` | `levelValid` |
-| `X_Full` | bit | `X_Full` | `full` |
-| `X_TooFull` | bit | `X_TooFull` | `tooFull` |
-| `Horn_AB`, `Horn_CD`, `Horn_Ef`, `Horn_GH` | bit | `Horn_*` | `horns[]` |
+| `Id` | bigint identity, PK clustered | — | — |
+| `DataOra` | datetime, default `getdate()` | — | asse dei tempi del trend (ora **locale** del server SQL, confermato) |
+| `X_LevelPercent` | float | `X_LevelPercent` | valore del trend |
+| `X_LevelValid` | bit | `X_LevelValid` | esclude dal trend le misure non valide |
+| `DataVersion`, `PlcReady`, `HeartBeat` | int, bit, int | idem | non usati (diretta dal PLC) |
+| `X_Full`, `X_TooFull` | bit | idem | non usati (eventi dal PLC) |
+| `Horn_AB`, `Horn_CD`, `Horn_Ef`, `Horn_GH` | bit | `Horn_*` | non usati (diretta dal PLC) |
 
 `X` = A…H. Tutte le colonne ammettono NULL.
 
@@ -256,12 +254,11 @@ Differenze rispetto al DB4 e conseguenze:
 
 | Punto | Conseguenza | Proposta |
 |---|---|---|
-| **Manca `X_TooFullFault`** (8 colonne) | il backend manda sempre `tooFullFault = false`: "Sensore max" mostra OK anche con il sensore guasto; nessun evento `TOO_FULL_FAULT` | aggiungere le colonne (script sotto) e farle scrivere a System Platform |
-| `DataOra` in ora locale, tipo `datetime` | conversione in UTC nel backend; l'ora doppia del cambio da ora legale a solare è ambigua | conversione con `TimeZoneInfo` (§7.7); in futuro `datetime2` in UTC o `datetimeoffset` |
+| Manca `X_TooFullFault` (8 colonne) | nessuna sul supervisore: il dato si legge dal PLC e gli eventi li registra il backend | facoltativo, per completezza dello storico |
+| `DataOra` in ora locale, tipo `datetime` | conversione in UTC nel backend; l'ora doppia del cambio da ora legale a solare è ambigua | conversione con `TimeZoneInfo` (§7.8); in futuro `datetime2` in UTC o `datetimeoffset` |
 | `HeartBeat` int, nel PLC UDInt | oltre 2.147.483.647 l'inserimento fallisce o il valore diventa negativo | portare a `bigint` |
-| Nessun indice su `DataOra` | storico e allarmi su 30 giorni leggono tutta la tabella | indice su `DataOra` (§7.8) |
-| Una riga **al minuto** (potrà variare) | il supervisore vede i dati con fino a ~1 min di ritardo; eventi più brevi di un intervallo possono non essere registrati; inizio e fine degli eventi hanno una precisione di ±1 min | i parametri che dipendono dall'intervallo sono in configurazione (§7.6) |
-| `Horn_Ef` scritto in minuscolo | nessun effetto in SQL; nel codice leggere le colonne senza distinzione maiuscole/minuscole | — |
+| Nessun indice su `DataOra` | il trend su 30 giorni legge tutta la tabella | indice su `DataOra` (§7.11) |
+| Una riga **al minuto** (potrà variare) | il trend ha un punto al minuto; non riguarda sinottico e allarmi | nessuna modifica al codice se cambia |
 
 ```sql
 -- Colonne mancanti rispetto al DB4 e heartbeat a 64 bit
@@ -271,7 +268,7 @@ ALTER TABLE dbo.LivelliSerbatoi ADD
 ALTER TABLE dbo.LivelliSerbatoi ALTER COLUMN HeartBeat bigint NULL;
 ```
 
-Il codice di §7.7 legge `X_TooFullFault` solo se la colonna esiste, quindi funziona prima e dopo lo script.
+L'`ALTER TABLE` su `HeartBeat` evita che l'inserimento di System Platform fallisca quando il contatore del PLC supera il limite di `int`.
 
 ## 6. Decisioni prese
 
@@ -286,149 +283,97 @@ Il codice di §7.7 legge `X_TooFullFault` solo se la colonna esiste, quindi funz
 | Autenticazione | nessuna per ora (rete interna). Quando si scriverà sul PLC: Windows Authentication su IIS, non JWT |
 | Aggiornamento dati | polling ogni 5 s (SignalR non serve finché i dati vengono dallo storico) |
 | Grafici | ECharts, non il chart di PrimeNG (Chart.js regge male migliaia di punti) |
+| Dati in diretta | letti dal **PLC 10.229.48.92 via S7** dal backend, una connessione in background; il PLC del `PlcService` esistente non si tocca |
+| Storico livelli | tabella `LivelliSerbatoi` scritta da System Platform, una riga al minuto |
+| Storico allarmi | tabella `SupTankEvent` scritta dal backend quando cambia un bit (precisione ~1 s) |
 
 ## 7. Backend da scrivere
 
 ### 7.1 Sorgenti dati
 
+```
+PLC 10.229.48.92 (DB4) ──S7, 1 connessione──► TankMonitorService (backend, ogni 1 s)
+                                                 ├─► TankLiveState (in memoria) ──► GetSystemStatus
+                                                 └─► dbo.SupTankEvent (inizio/fine eventi) ──► GetAlarms
+System Platform ──1 riga/minuto──► dbo.LivelliSerbatoi ──────────────────────────► GetTankHistory
+                                   dbo.SupTankConfig ◄──────────────────────────► GetTankConfig / SaveTankConfig
+```
+
 | Endpoint | Sorgente |
 |---|---|
-| `GetSystemStatus` | ultima riga di `LivelliSerbatoi` + configurazione `SupTankConfig` |
-| `GetTankHistory` | righe di `LivelliSerbatoi` nel periodo, raggruppate in ~600 intervalli |
-| `GetAlarms` | eventi **ricostruiti** dai cambi dei bit tra righe consecutive (nessuna tabella allarmi) |
-| `GetTankConfig` / `SaveTankConfig` | nuova tabella `SupTankConfig` nello stesso database |
+| `GetSystemStatus` | ultima lettura del PLC tenuta in memoria + `SupTankConfig` |
+| `GetAlarms?activeOnly=true` | `SupTankEvent` con `ClearedAt IS NULL` |
+| `GetAlarms` (storico) | `SupTankEvent` nel periodo |
+| `GetTankHistory` | `LivelliSerbatoi`, righe nel periodo raggruppate in ~600 intervalli |
+| `GetTankConfig` / `SaveTankConfig` | `SupTankConfig` |
 
-Regole comuni:
+Regole:
 
-- Le righe si ordinano per `Id` (crescente con l'inserimento); i filtri di periodo usano `DataOra`.
-- Il periodo `from`/`to` arriva dal frontend in UTC e va convertito nell'ora locale di `DataOra`
-  prima della query; i `DataOra` letti vanno riconvertiti in UTC.
-- Le colonne per serbatoio si compongono come `{X}_LevelPercent` solo dopo aver verificato che `X`
-  sia una lettera A–H: è l'unico caso in cui si inserisce testo nella query.
-- Misura non valida (`X_LevelValid = 0`) → `levelPercent`/`levelLiters` null.
+- **Una sola connessione al PLC**, aperta da un servizio in background. Le richieste HTTP non parlano
+  mai con il PLC: leggono la copia in memoria. Con più postazioni aperte il 1214C non riceve più
+  connessioni (ha un numero limitato di connessioni S7, già usate anche da System Platform).
+- Il PLC 10.229.48.92 è **diverso** da quello letto dal `PlcService` esistente, che non va toccato:
+  classi e connessione nuove, separate.
+- Gli eventi li scrive il backend quando vede cambiare un bit: allarmi attivi e storico coincidono,
+  con la precisione della lettura (1 s) e non di quella della tabella (1 minuto).
+- Orari: le letture dal PLC e gli eventi usano l'orologio del server del backend, in UTC.
+  `DataOra` di `LivelliSerbatoi` è ora locale del server SQL e va convertita (§7.8, `TankDal`).
 
-### 7.2 Query
+### 7.2 Lettura del DB4 via S7
 
-**Stato attuale.** Ultima riga, più l'ora del server SQL (stesso orologio di `DataOra`, così l'età
-dell'heartbeat non dipende dall'orologio del server web):
+Requisiti lato PLC e rete:
 
-```sql
-SELECT TOP (1) *, GETDATE() AS DbNow
-FROM dbo.LivelliSerbatoi
-ORDER BY Id DESC;
-```
+- sul 1214C abilitare **"Consenti accesso con comunicazione PUT/GET dal partner remoto"**
+  (Protezione e sicurezza → Meccanismi di connessione);
+- DB4 **non ottimizzato** (già così): si legge per indirizzo assoluto;
+- il server del backend deve raggiungere **10.229.48.92 sulla porta TCP 102**;
+- S7-1200: rack 0, slot 1 (in configurazione).
 
-**Ora dell'ultimo cambio dell'heartbeat.** Prima riga dopo l'ultima con heartbeat diverso, cercando
-nelle ultime `@lookbackRows` righe (se non cambia mai in quella finestra, risulta l'ora più vecchia
-della finestra e il frontend mostra "Com. persa"):
+Libreria proposta: **S7netplus** (pacchetto NuGet `S7netplus`). Se il `PlcService` esistente usa
+un'altra libreria S7 (es. Sharp7), si può usare quella: cambia solo la classe che legge i byte.
 
-```sql
-SELECT MIN(DataOra)
-FROM dbo.LivelliSerbatoi
-WHERE Id <= @lastId
-  AND Id > ISNULL((SELECT TOP (1) Id FROM dbo.LivelliSerbatoi
-                   WHERE Id < @lastId AND Id >= @lastId - @lookbackRows
-                     AND (HeartBeat <> @hb OR HeartBeat IS NULL)
-                   ORDER BY Id DESC),
-                  @lastId - @lookbackRows - 1);
-```
+Una lettura = **55 byte** del DB4 (offset 0–54), poi si decodificano. Tutti i valori S7 sono big-endian:
 
-Se System Platform smette di scrivere, l'ultima riga invecchia e l'heartbeat risulta fermo: il
-frontend lo segnala come comunicazione persa.
+| Byte | Contenuto |
+|---|---|
+| 0–1 | `DataVersion` UInt |
+| 2, bit 0 | `PLCReady` |
+| 4–7 | `Heartbeat` UDInt |
+| `8 + 6·i` … +3 | `X_LevelPercent` Real del serbatoio *i* (A = 0 … H = 7) |
+| `12 + 6·i`, bit 0/1/2/3 | `X_LevelValid` / `X_Full` / `X_TooFull` / `X_TooFullFault` |
+| 54, bit 4/5/6/7 | `Horn_AB` / `Horn_CD` / `Horn_EF` / `Horn_GH` |
 
-**Storico di un serbatoio** (`{X}` = lettera validata; `@bucketSec` = durata periodo / 600, minimo 60):
+Controllo: A = 8.0 e 12.0–12.3, H = 50.0 e 54.0–54.3, come nella tabella del DB4 (§5.1).
 
-```sql
-SELECT DATEDIFF(second, @fromLocal, DataOra) / @bucketSec AS Bucket,
-       AVG(CASE WHEN {X}_LevelValid = 1 THEN {X}_LevelPercent END) AS LevelPercent
-FROM dbo.LivelliSerbatoi
-WHERE DataOra >= @fromLocal AND DataOra < @toLocal
-GROUP BY DATEDIFF(second, @fromLocal, DataOra) / @bucketSec;
-```
+### 7.3 Servizio in background ed eventi
 
-Il backend crea poi un campione per ogni intervallo fino a "adesso": intervalli senza righe o con sola
-misura non valida → valore null (il grafico mostra il buco invece di unire i punti).
+`TankMonitorService` (`BackgroundService`), ciclo ogni `PollIntervalMs` (1 s):
 
-**Eventi di allarme nel periodo.** Una riga per ogni cambio di stato, per serbatoio e tipo:
+1. Se non connesso, apre la connessione; legge i 55 byte; aggiorna `TankLiveState`.
+2. Calcola le condizioni attive dalla lettura:
 
-```sql
-WITH s AS (
-    SELECT t.Id, t.DataOra, v.Code, v.Kind, v.Active
-    FROM dbo.LivelliSerbatoi t
-    CROSS APPLY (VALUES
-        ('A', 'TOO_FULL',      CASE WHEN t.A_TooFull = 1    THEN 1 ELSE 0 END),
-        ('A', 'FULL',          CASE WHEN t.A_Full = 1       THEN 1 ELSE 0 END),
-        ('A', 'LEVEL_INVALID', CASE WHEN t.A_LevelValid = 0 THEN 1 ELSE 0 END),
-        -- ... B-H; con le colonne X_TooFullFault anche ('X', 'TOO_FULL_FAULT', ...)
-        ('',  'PLC_NOT_READY', CASE WHEN t.PlcReady = 0     THEN 1 ELSE 0 END)   -- '' = non legato a un serbatoio
-    ) v (Code, Kind, Active)
-    WHERE t.DataOra >= @fromLocal AND t.DataOra < @toLocal
-),
-e AS (
-    SELECT Code, Kind, DataOra, Active,
-           LAG(Active, 1, 0) OVER (PARTITION BY Code, Kind ORDER BY Id) AS Prev
-    FROM s
-)
-SELECT Code, Kind, DataOra, Active
-FROM e
-WHERE Active <> Prev
-ORDER BY Code, Kind, DataOra;
-```
+| Tipo | Condizione | Serbatoio |
+|---|---|---|
+| `TOO_FULL` | `X_TooFull` | sì |
+| `FULL` | `X_Full` | sì |
+| `TOO_FULL_FAULT` | `X_TooFullFault` | sì |
+| `LEVEL_INVALID` | `X_LevelValid = 0` | sì |
+| `PLC_NOT_READY` | `PLCReady = 0` | no |
+| `PLC_COMM` | heartbeat fermo da più di `HeartbeatTimeoutSec`, o PLC non leggibile | no |
 
-Il backend accoppia i fronti: `Active = 1` → `raisedAt`, il successivo `Active = 0` → `clearedAt`,
-nessun rientro → evento ancora attivo. Un evento già attivo all'inizio del periodo risulta iniziato
-alla prima riga del periodo. La query si costruisce nel codice per i soli serbatoi richiesti (§7.7).
+3. Confronta con gli eventi aperti: condizione nuova → `INSERT` con `RaisedAt`; condizione sparita →
+   `UPDATE ClearedAt`.
+4. Se la lettura fallisce: chiude la connessione, segna l'errore, riprova dopo `ReconnectDelayMs`. Gli
+   altri eventi restano come sono (non si sa se sono rientrati); si valuta solo `PLC_COMM`.
+5. Un errore nel database non ferma la lettura del PLC: l'evento viene riscritto al giro successivo.
 
-**Allarmi attivi** (`activeOnly=true`, chiamato ogni 5 s): non serve rileggere giorni di righe.
-Dall'ultima riga si vede cosa è attivo; per ognuno si cerca da quando:
+All'avvio il servizio carica gli eventi aperti dalla tabella e alla prima lettura chiude quelli non più
+attivi, con l'ora della lettura: **mentre il backend è fermo gli eventi non vengono registrati**, e un
+evento rientrato in quel periodo risulta chiuso al riavvio.
 
-```sql
--- inizio dell'evento: prima riga dopo l'ultima in cui la condizione era falsa
-SELECT MIN(DataOra)
-FROM dbo.LivelliSerbatoi
-WHERE Id <= @lastId
-  AND Id > ISNULL((SELECT TOP (1) Id FROM dbo.LivelliSerbatoi
-                   WHERE Id <= @lastId AND Id >= @lastId - @lookbackRows
-                     AND ISNULL({X}_TooFull, 0) = 0          -- per LEVEL_INVALID: ISNULL({X}_LevelValid, 1) = 1
-                   ORDER BY Id DESC),
-                  @lastId - @lookbackRows - 1);
-```
+Il servizio funziona solo se l'applicazione è in esecuzione: su IIS va tenuta **sempre attiva** (§7.10).
 
-`PLC_NOT_READY` segue lo stesso schema sulla colonna `PlcReady` (attivo quando vale 0).
-`PLC_COMM` attivo = heartbeat fermo oltre `HeartbeatTimeoutSec` (stesso calcolo dello stato). Nello storico
-`PLC_COMM` non viene ricostruito: richiederebbe di cercare i buchi dell'heartbeat su tutto il periodo.
-
-<!--
-=== NON USATO: ipotesi AVEVA Historian (superata dalla tabella LivelliSerbatoi) ===
-
-Se in futuro i dati venissero letti dall'Historian invece che dalla tabella, lo schema tipico è il
-database Runtime con le viste Live e History; esempi indicativi, da verificare:
-
--- ultimo valore (Live): DateTime = ora dell'ultimo cambio per i tag a delta
-SELECT TagName, Value, DateTime, QualityDetail
-FROM Runtime.dbo.Live
-WHERE TagName IN ('<tag A_LevelPercent>', '<tag A_LevelValid>', ...);
-
--- storico ricampionato: ~600 punti nell'intervallo
-SELECT DateTime, Value, QualityDetail
-FROM Runtime.dbo.History
-WHERE TagName = '<tag A_LevelPercent>'
-  AND DateTime >= @from AND DateTime <= @to
-  AND wwRetrievalMode = 'Cyclic'
-  AND wwResolution = @resolutionMs;   -- (to - from) / 600, minimo 60000
-
--- cambi di un bit (per ricostruire gli eventi)
-SELECT DateTime, Value FROM Runtime.dbo.History
-WHERE TagName = '<tag A_TooFull>' AND DateTime >= @from AND DateTime <= @to
-  AND wwRetrievalMode = 'Delta';
-
-Note: su alcune installazioni si passa da OPENQUERY(INSQL, '...'), che non accetta parametri;
-verificare il fuso dei timestamp (wwTimeZone); nomi dei tag in configurazione, non nel codice.
-I requisiti di storicizzazione (heartbeat e bit registrati a ogni cambio, deadband piccolo sul
-livello) valgono anche per la frequenza di scrittura della tabella LivelliSerbatoi.
--->
-
-### 7.3 Tabella di configurazione
+### 7.4 Tabella di configurazione
 
 Nello stesso database della tabella dei livelli:
 
@@ -460,7 +405,42 @@ VALUES ('A','Serbatoio A',10000,85,95), ('B','Serbatoio B',10000,85,95),
 capacità 100–100.000 l, 0 < pieno < troppo pieno ≤ 100), aggiornare solo le righe ricevute in una
 transazione, impostare `UpdatedAt = SYSUTCDATETIME()` e restituire tutte le 8 righe.
 
-### 7.4 DTO C# (bozza)
+### 7.5 Tabella degli eventi
+
+```sql
+USE [dana_verniciatura];
+GO
+
+CREATE TABLE dbo.SupTankEvent (
+    Id         BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    Kind       VARCHAR(20)   NOT NULL,
+    TankCode   CHAR(1)       NULL,          -- NULL per PLC_NOT_READY e PLC_COMM
+    Message    NVARCHAR(200) NOT NULL,
+    RaisedAt   DATETIME2(0)  NOT NULL,      -- UTC
+    ClearedAt  DATETIME2(0)  NULL,          -- UTC; NULL = evento in corso
+    CONSTRAINT CK_SupTankEvent_Kind CHECK (Kind IN
+        ('TOO_FULL','FULL','TOO_FULL_FAULT','LEVEL_INVALID','LOW_WARNING','LOW_STOP','PLC_NOT_READY','PLC_COMM')),
+    CONSTRAINT CK_SupTankEvent_Code CHECK (TankCode IS NULL OR TankCode IN ('A','B','C','D','E','F','G','H')),
+    CONSTRAINT CK_SupTankEvent_Dates CHECK (ClearedAt IS NULL OR ClearedAt >= RaisedAt)
+);
+GO
+
+-- Al massimo un evento aperto per tipo e serbatoio (protegge da doppie istanze del backend)
+CREATE UNIQUE NONCLUSTERED INDEX UX_SupTankEvent_Open
+    ON dbo.SupTankEvent (Kind, TankCode)
+    WHERE ClearedAt IS NULL;
+GO
+
+-- Storico per periodo
+CREATE NONCLUSTERED INDEX IX_SupTankEvent_RaisedAt
+    ON dbo.SupTankEvent (RaisedAt) INCLUDE (Kind, TankCode, Message, ClearedAt);
+GO
+```
+
+Gli indici filtrati richiedono le opzioni `SET` standard (`ANSI_NULLS`, `QUOTED_IDENTIFIER` ON), già
+attive nella connessione di `Microsoft.Data.SqlClient`.
+
+### 7.6 DTO C# (bozza)
 
 ```csharp
 using System;
@@ -553,16 +533,16 @@ namespace ServiceBackend.Model.Tanks
 
 `Kind` resta stringa (con i valori esatti di §3) per evitare di configurare un convertitore di enum.
 
-### 7.5 Controller (scheletro)
+### 7.7 Controller (scheletro)
 
 Stesso schema degli altri controller: risposta sempre in `Response`, errori nel log.
-Presuppone il `DAL` registrato nel container (§8) con i nuovi metodi `TankDal...`, oppure una classe
-`TankDal` separata (consigliato, per non gonfiare `DAL`).
+Usa la classe `TankDal` di §7.8, separata dal `DAL` esistente.
 
 ```csharp
 using Microsoft.AspNetCore.Mvc;
 using ServiceBackend.Model;
 using ServiceBackend.Model.Tanks;
+using ServiceBackend.Tanks;
 
 namespace ServiceBackend.Controllers
 {
@@ -634,163 +614,437 @@ Usare `string?` per i parametri facoltativi: con `Nullable` attivo nel progetto 
 Nota: `GetAlarms` con `activeOnly=true` e nessun allarme deve restituire `ListItem = []` con
 `StatusCode = 200` (non 204/null): il frontend lo legge come "nessun allarme attivo".
 
-### 7.6 Registrazione in `Program.cs` e `appsettings.json`
+### 7.8 Codice di accesso (bozza)
+
+Cinque classi nuove, nessuna modifica a `PlcService` e `DAL`:
+
+| Classe | Ciclo di vita | Compito |
+|---|---|---|
+| `TankPlcOptions` | configurazione | parametri del PLC serbatoi |
+| `Db4Layout` | statica | decodifica dei 55 byte |
+| `TankLiveState` | singleton | ultima lettura e ora dell'ultimo cambio dell'heartbeat |
+| `TankEventStore` | singleton | lettura e scrittura di `SupTankEvent` |
+| `TankMonitorService` | hosted service | lettura ciclica del PLC ed eventi |
+| `TankDal` | scoped | dati per il controller: stato, storico, allarmi, configurazione |
+
+#### Opzioni, decodifica, stato in memoria
 
 ```csharp
-builder.Services.AddScoped<TankDal>();   // dipende da IConfiguration, ILogger<TankDal>
-```
+using System.Buffers.Binary;
 
-```json
-"Tanks": {
-  "SourceTimeZone": "W. Europe Standard Time",
-  "LookbackRows": 20000,
-  "HeartbeatTimeoutSec": 180
+namespace ServiceBackend.Tanks
+{
+    public class TankPlcOptions
+    {
+        public string Ip { get; set; } = "10.229.48.92";
+        public short Rack { get; set; } = 0;
+        public short Slot { get; set; } = 1;
+        public int DbNumber { get; set; } = 4;
+        public int PollIntervalMs { get; set; } = 1000;
+        public int ReconnectDelayMs { get; set; } = 5000;
+        public int TimeoutMs { get; set; } = 2000;
+        public int HeartbeatTimeoutSec { get; set; } = 20;
+    }
+
+    public sealed record TankLive(string Code, double LevelPercent, bool LevelValid, bool Full, bool TooFull, bool TooFullFault);
+
+    public sealed record PlcSnapshot(
+        DateTimeOffset ReadAt, int DataVersion, bool PlcReady, long Heartbeat,
+        IReadOnlyList<TankLive> Tanks, IReadOnlyDictionary<string, bool> Horns);
+
+    public static class Db4Layout
+    {
+        public static readonly string[] Codes = { "A", "B", "C", "D", "E", "F", "G", "H" };
+        public const int Length = 55;   // byte 0..54
+
+        public static PlcSnapshot Parse(byte[] b, DateTimeOffset readAt)
+        {
+            if (b.Length < Length) throw new InvalidOperationException($"DB4: letti {b.Length} byte, attesi {Length}");
+
+            var tanks = new List<TankLive>(Codes.Length);
+            for (int i = 0; i < Codes.Length; i++)
+            {
+                int off = 8 + 6 * i;
+                byte bits = b[off + 4];
+                tanks.Add(new TankLive(
+                    Codes[i],
+                    BinaryPrimitives.ReadSingleBigEndian(b.AsSpan(off, 4)),
+                    LevelValid: (bits & 0x01) != 0,
+                    Full: (bits & 0x02) != 0,
+                    TooFull: (bits & 0x04) != 0,
+                    TooFullFault: (bits & 0x08) != 0));
+            }
+
+            byte horns = b[54];
+            return new PlcSnapshot(
+                readAt,
+                DataVersion: BinaryPrimitives.ReadUInt16BigEndian(b.AsSpan(0, 2)),
+                PlcReady: (b[2] & 0x01) != 0,
+                Heartbeat: BinaryPrimitives.ReadUInt32BigEndian(b.AsSpan(4, 4)),
+                Tanks: tanks,
+                Horns: new Dictionary<string, bool>
+                {
+                    ["AB"] = (horns & 0x10) != 0,
+                    ["CD"] = (horns & 0x20) != 0,
+                    ["EF"] = (horns & 0x40) != 0,
+                    ["GH"] = (horns & 0x80) != 0,
+                });
+        }
+    }
+
+    /// <summary>Ultima lettura del PLC, condivisa tra il servizio di lettura e le richieste HTTP.</summary>
+    public sealed class TankLiveState
+    {
+        private readonly object _gate = new();
+        private PlcSnapshot? _last;
+        private DateTimeOffset? _heartbeatChangedAt;
+        private string? _lastError;
+
+        public void Update(PlcSnapshot s)
+        {
+            lock (_gate)
+            {
+                if (_last == null || _last.Heartbeat != s.Heartbeat) _heartbeatChangedAt = s.ReadAt;
+                _last = s;
+                _lastError = null;
+            }
+        }
+
+        public void SetError(string message)
+        {
+            lock (_gate) { _lastError = message; }
+        }
+
+        public (PlcSnapshot? Snapshot, DateTimeOffset? HeartbeatChangedAt, string? LastError) Read()
+        {
+            lock (_gate) { return (_last, _heartbeatChangedAt, _lastError); }
+        }
+    }
 }
 ```
 
-- `SourceTimeZone`: fuso di `DataOra` (nome Windows; su Linux sarebbe `Europe/Rome`).
-- `LookbackRows`: quante righe indietro cercare l'inizio di un evento o l'ultimo cambio
-  dell'heartbeat. Con una riga al minuto, 20.000 righe ≈ 14 giorni. Un evento più lungo risulta
-  iniziato all'inizio della finestra. Se l'intervallo di scrittura cambia, ridimensionare.
-- `HeartbeatTimeoutSec`: circa **3 volte l'intervallo di scrittura** (1 min → 180 s). Con un valore più
-  basso dell'intervallo il supervisore segnala "Com. persa" tra una riga e l'altra anche con tutto
-  funzionante. Deve coincidere con `heartbeatTimeoutSec` di `config.json` del frontend (già 180).
-
-### 7.7 `TankDal` (bozza)
-
-Accesso ai dati per il `TanksController`: legge `LivelliSerbatoi`, gestisce `SupTankConfig`,
-converte gli orari. Usa Dapper come il resto del backend.
+#### Eventi su database
 
 ```csharp
-using System.Data;
 using Dapper;
 using Microsoft.Data.SqlClient;
 using ServiceBackend.Model.Tanks;
 
-namespace ServiceBackend.Model
+namespace ServiceBackend.Tanks
+{
+    public sealed record EventKey(string Kind, string? TankCode);
+
+    public class TankEventStore
+    {
+        private readonly string _connectionString;
+
+        public TankEventStore(IConfiguration config)
+        {
+            _connectionString = config.GetConnectionString("DanaBackendEntities")
+                ?? throw new InvalidOperationException("Stringa di connessione 'DanaBackendEntities' mancante");
+        }
+
+        public async Task<HashSet<EventKey>> LoadOpenKeysAsync()
+        {
+            using var cn = new SqlConnection(_connectionString);
+            var rows = await cn.QueryAsync<(string Kind, string? TankCode)>(
+                "SELECT Kind, TankCode FROM dbo.SupTankEvent WHERE ClearedAt IS NULL");
+            return rows.Select(r => new EventKey(r.Kind, r.TankCode)).ToHashSet();
+        }
+
+        public async Task OpenAsync(EventKey key, string message, DateTimeOffset at)
+        {
+            using var cn = new SqlConnection(_connectionString);
+            try
+            {
+                await cn.ExecuteAsync(@"
+                    INSERT INTO dbo.SupTankEvent (Kind, TankCode, Message, RaisedAt)
+                    VALUES (@Kind, @TankCode, @message, @at)",
+                    new { key.Kind, key.TankCode, message, at = at.UtcDateTime });
+            }
+            catch (SqlException ex) when (ex.Number is 2601 or 2627)
+            {
+                // Evento già aperto (indice univoco sugli eventi aperti): niente da fare.
+            }
+        }
+
+        public async Task CloseAsync(EventKey key, DateTimeOffset at)
+        {
+            using var cn = new SqlConnection(_connectionString);
+            await cn.ExecuteAsync(@"
+                UPDATE dbo.SupTankEvent SET ClearedAt = @at
+                WHERE Kind = @Kind AND ClearedAt IS NULL
+                  AND (TankCode = @TankCode OR (TankCode IS NULL AND @TankCode IS NULL))",
+                new { key.Kind, key.TankCode, at = at.UtcDateTime });
+        }
+
+        private sealed class EventRow
+        {
+            public long Id { get; set; }
+            public string Kind { get; set; } = "";
+            public string? TankCode { get; set; }
+            public string Message { get; set; } = "";
+            public DateTime RaisedAt { get; set; }
+            public DateTime? ClearedAt { get; set; }
+        }
+
+        public async Task<List<AlarmEventDto>> QueryAsync(bool activeOnly, DateTimeOffset? from, DateTimeOffset? to, string? code)
+        {
+            using var cn = new SqlConnection(_connectionString);
+            var rows = activeOnly
+                ? await cn.QueryAsync<EventRow>(@"
+                    SELECT Id, Kind, TankCode, Message, RaisedAt, ClearedAt FROM dbo.SupTankEvent
+                    WHERE ClearedAt IS NULL AND (@code IS NULL OR TankCode = @code)
+                    ORDER BY RaisedAt DESC", new { code })
+                : await cn.QueryAsync<EventRow>(@"
+                    SELECT Id, Kind, TankCode, Message, RaisedAt, ClearedAt FROM dbo.SupTankEvent
+                    WHERE RaisedAt < @to AND (ClearedAt IS NULL OR ClearedAt >= @from)
+                      AND (@code IS NULL OR TankCode = @code)
+                    ORDER BY RaisedAt DESC",
+                    new
+                    {
+                        code,
+                        from = (from ?? DateTimeOffset.UtcNow.AddDays(-7)).UtcDateTime,
+                        to = (to ?? DateTimeOffset.UtcNow).UtcDateTime,
+                    });
+
+            // Le colonne sono DATETIME2 in UTC: Dapper le restituisce senza fuso.
+            static DateTimeOffset Utc(DateTime d) => new(DateTime.SpecifyKind(d, DateTimeKind.Utc));
+            return rows.Select(r => new AlarmEventDto
+            {
+                Id = r.Id,
+                Kind = r.Kind,
+                TankCode = r.TankCode,
+                Message = r.Message,
+                RaisedAt = Utc(r.RaisedAt),
+                ClearedAt = r.ClearedAt.HasValue ? Utc(r.ClearedAt.Value) : null,
+            }).ToList();
+        }
+    }
+}
+```
+
+Lo storico restituisce gli eventi **attivi in qualche momento del periodo** (iniziati prima e finiti
+dopo `from` compresi).
+
+#### Servizio di lettura
+
+```csharp
+using Microsoft.Extensions.Options;
+using S7.Net;
+
+namespace ServiceBackend.Tanks
+{
+    public class TankMonitorService : BackgroundService
+    {
+        private static readonly EventKey PlcComm = new("PLC_COMM", null);
+
+        private readonly TankPlcOptions _opt;
+        private readonly TankLiveState _state;
+        private readonly TankEventStore _events;
+        private readonly ILogger<TankMonitorService> _logger;
+        private HashSet<EventKey> _open = new();
+
+        public TankMonitorService(IOptions<TankPlcOptions> opt, TankLiveState state, TankEventStore events, ILogger<TankMonitorService> logger)
+        {
+            _opt = opt.Value;
+            _state = state;
+            _events = events;
+            _logger = logger;
+        }
+
+        protected override async Task ExecuteAsync(CancellationToken ct)
+        {
+            await LoadOpenEventsAsync(ct);
+            Plc? plc = null;
+
+            while (!ct.IsCancellationRequested)
+            {
+                int delay = _opt.PollIntervalMs;
+                try
+                {
+                    plc ??= new Plc(CpuType.S71200, _opt.Ip, _opt.Rack, _opt.Slot)
+                    {
+                        ReadTimeout = _opt.TimeoutMs,
+                        WriteTimeout = _opt.TimeoutMs,
+                    };
+                    if (!plc.IsConnected) await plc.OpenAsync(ct);
+
+                    var bytes = await plc.ReadBytesAsync(DataType.DataBlock, _opt.DbNumber, 0, Db4Layout.Length, ct);
+                    var snap = Db4Layout.Parse(bytes, DateTimeOffset.UtcNow);
+                    _state.Update(snap);
+                    await SyncAsync(ActiveKeys(snap), snap.ReadAt);
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested)
+                {
+                    _logger.LogWarning(ex, "Lettura PLC serbatoi {Ip} non riuscita", _opt.Ip);
+                    _state.SetError(ex.Message);
+                    try { plc?.Close(); } catch { /* connessione già persa */ }
+                    plc = null;
+                    delay = _opt.ReconnectDelayMs;
+                }
+
+                // PLC_COMM si valuta sempre, anche quando la lettura fallisce.
+                var (_, hbChangedAt, _) = _state.Read();
+                bool commLost = hbChangedAt == null
+                    || (DateTimeOffset.UtcNow - hbChangedAt.Value).TotalSeconds > _opt.HeartbeatTimeoutSec;
+                await SyncPlcCommAsync(commLost, hbChangedAt);
+
+                try { await Task.Delay(delay, ct); } catch (OperationCanceledException) { break; }
+            }
+
+            try { plc?.Close(); } catch { }
+        }
+
+        private async Task LoadOpenEventsAsync(CancellationToken ct)
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                try { _open = await _events.LoadOpenKeysAsync(); return; }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Lettura eventi aperti non riuscita, nuovo tentativo tra 10 s");
+                    await Task.Delay(10_000, ct);
+                }
+            }
+        }
+
+        private static HashSet<EventKey> ActiveKeys(PlcSnapshot s)
+        {
+            var keys = new HashSet<EventKey>();
+            foreach (var t in s.Tanks)
+            {
+                if (t.TooFull) keys.Add(new("TOO_FULL", t.Code));
+                if (t.Full) keys.Add(new("FULL", t.Code));
+                if (t.TooFullFault) keys.Add(new("TOO_FULL_FAULT", t.Code));
+                if (!t.LevelValid) keys.Add(new("LEVEL_INVALID", t.Code));
+            }
+            if (!s.PlcReady) keys.Add(new("PLC_NOT_READY", null));
+            return keys;
+        }
+
+        /// <summary>Apre gli eventi nuovi e chiude quelli rientrati (escluso PLC_COMM, gestito a parte).</summary>
+        private async Task SyncAsync(HashSet<EventKey> active, DateTimeOffset at)
+        {
+            foreach (var key in active.Where(k => !_open.Contains(k)).ToList())
+                await TryAsync(async () => { await _events.OpenAsync(key, Message(key), at); _open.Add(key); });
+            foreach (var key in _open.Where(k => k != PlcComm && !active.Contains(k)).ToList())
+                await TryAsync(async () => { await _events.CloseAsync(key, at); _open.Remove(key); });
+        }
+
+        private async Task SyncPlcCommAsync(bool commLost, DateTimeOffset? since)
+        {
+            if (commLost && !_open.Contains(PlcComm))
+                await TryAsync(async () => { await _events.OpenAsync(PlcComm, Message(PlcComm), since ?? DateTimeOffset.UtcNow); _open.Add(PlcComm); });
+            else if (!commLost && _open.Contains(PlcComm))
+                await TryAsync(async () => { await _events.CloseAsync(PlcComm, DateTimeOffset.UtcNow); _open.Remove(PlcComm); });
+        }
+
+        private async Task TryAsync(Func<Task> write)
+        {
+            try { await write(); }
+            catch (Exception ex) { _logger.LogError(ex, "Scrittura evento serbatoi non riuscita, ritento al prossimo ciclo"); }
+        }
+
+        private static string Message(EventKey k) => k.Kind switch
+        {
+            "TOO_FULL" => $"Serbatoio {k.TankCode}: livello massimo raggiunto",
+            "FULL" => $"Serbatoio {k.TankCode}: pieno",
+            "TOO_FULL_FAULT" => $"Serbatoio {k.TankCode}: anomalia sensore di massimo livello",
+            "LEVEL_INVALID" => $"Serbatoio {k.TankCode}: misura radar non valida",
+            "PLC_NOT_READY" => "PLC non pronto",
+            "PLC_COMM" => "Comunicazione PLC interrotta",
+            _ => k.Kind,
+        };
+    }
+}
+```
+
+Nota: `PLC_COMM` aperto usa come inizio l'ultimo cambio dell'heartbeat (quando il PLC ha smesso di
+rispondere), non il momento in cui scade il tempo.
+
+#### `TankDal`: dati per il controller
+
+```csharp
+using Dapper;
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Options;
+using ServiceBackend.Model.Tanks;
+
+namespace ServiceBackend.Tanks
 {
     public class TankDal
     {
-        public static readonly string[] Codes = { "A", "B", "C", "D", "E", "F", "G", "H" };
-
         private static readonly Dictionary<string, string> ZoneOf = new()
         {
             ["A"] = "AB", ["B"] = "AB", ["C"] = "CD", ["D"] = "CD",
             ["E"] = "EF", ["F"] = "EF", ["G"] = "GH", ["H"] = "GH",
         };
 
-        private static readonly (string Zone, string Column)[] HornColumns =
-        {
-            ("AB", "Horn_AB"), ("CD", "Horn_CD"), ("EF", "Horn_Ef"), ("GH", "Horn_GH"),
-        };
-
         private const int HistoryPoints = 600;
 
         private readonly string _connectionString;
         private readonly TimeZoneInfo _sourceZone;
-        private readonly int _lookbackRows;
-        private readonly int _heartbeatTimeoutSec;
+        private readonly TankLiveState _live;
+        private readonly TankEventStore _events;
+        private readonly TankPlcOptions _plc;
         private readonly ILogger<TankDal> _logger;
 
-        public TankDal(IConfiguration config, ILogger<TankDal> logger)
+        public TankDal(IConfiguration config, TankLiveState live, TankEventStore events, IOptions<TankPlcOptions> plc, ILogger<TankDal> logger)
         {
             _connectionString = config.GetConnectionString("DanaBackendEntities")
                 ?? throw new InvalidOperationException("Stringa di connessione 'DanaBackendEntities' mancante");
             _sourceZone = TimeZoneInfo.FindSystemTimeZoneById(config["Tanks:SourceTimeZone"] ?? "W. Europe Standard Time");
-            _lookbackRows = config.GetValue("Tanks:LookbackRows", 20000);
-            _heartbeatTimeoutSec = config.GetValue("Tanks:HeartbeatTimeoutSec", 180);
+            _live = live;
+            _events = events;
+            _plc = plc.Value;
             _logger = logger;
         }
 
-        public static bool IsValidCode(string? code) => code != null && Codes.Contains(code);
+        public static bool IsValidCode(string? code) => code != null && Db4Layout.Codes.Contains(code);
 
-        // ---------- orari: DataOra è ora locale senza fuso ----------
-
-        private DateTimeOffset ToUtc(DateTime local) =>
-            new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), _sourceZone));
-
-        private DateTime ToLocal(DateTimeOffset utc) =>
-            TimeZoneInfo.ConvertTimeFromUtc(utc.UtcDateTime, _sourceZone);
-
-        // ---------- lettura sicura dei valori (colonne NULL, nomi senza distinzione maiuscole) ----------
-
-        private static Dictionary<string, object?> ToRow(object dapperRow) =>
-            new(((IDictionary<string, object?>)dapperRow), StringComparer.OrdinalIgnoreCase);
-
-        private static double? Dbl(Dictionary<string, object?> r, string col) =>
-            r.TryGetValue(col, out var v) && v != null ? Convert.ToDouble(v) : null;
-
-        private static bool Bit(Dictionary<string, object?> r, string col) =>
-            r.TryGetValue(col, out var v) && v is bool b && b;
-
-        // ---------- stato attuale ----------
+        // ---------- stato attuale: dal PLC (memoria) ----------
 
         public async Task<SystemStatusDto> GetSystemStatusAsync()
         {
-            using var cn = new SqlConnection(_connectionString);
-            var snap = await ReadSnapshotAsync(cn);
-            var config = (await ReadConfigAsync(cn)).ToDictionary(c => c.Code);
+            var (snap, hbChangedAt, error) = _live.Read();
+            if (snap == null)
+                throw new InvalidOperationException($"PLC serbatoi {_plc.Ip} non ancora letto{(error != null ? ": " + error : "")}");
 
-            var tanks = Codes.Select(code => BuildTank(code, snap.Row, config[code], snap.Timestamp)).ToList();
-
+            var config = (await GetTankConfigAsync()).ToDictionary(c => c.Code);
             return new SystemStatusDto
             {
                 Plc = new PlcStatusDto
                 {
-                    PlcReady = Bit(snap.Row, "PlcReady"),
-                    Heartbeat = (long)(Dbl(snap.Row, "HeartBeat") ?? 0),
-                    HeartbeatChangedAt = snap.HeartbeatChangedAt,
-                    DataVersion = (int)(Dbl(snap.Row, "DataVersion") ?? 0),
+                    PlcReady = snap.PlcReady,
+                    Heartbeat = snap.Heartbeat,
+                    HeartbeatChangedAt = hbChangedAt ?? snap.ReadAt,
+                    DataVersion = snap.DataVersion,
                 },
-                Tanks = tanks,
-                Horns = HornColumns.Select(h => new ZoneHornDto { Zone = h.Zone, Active = Bit(snap.Row, h.Column) }).ToList(),
-                ServerTime = snap.DbNow,
+                Tanks = snap.Tanks.Select(t => BuildTank(t, config[t.Code], snap.ReadAt)).ToList(),
+                Horns = snap.Horns.Select(h => new ZoneHornDto { Zone = h.Key, Active = h.Value }).ToList(),
+                // Stesso orologio di HeartbeatChangedAt (server del backend).
+                ServerTime = DateTimeOffset.UtcNow,
             };
         }
 
-        private sealed record Snapshot(long LastId, Dictionary<string, object?> Row, DateTimeOffset Timestamp,
-                                       DateTimeOffset DbNow, DateTimeOffset HeartbeatChangedAt);
-
-        private async Task<Snapshot> ReadSnapshotAsync(SqlConnection cn)
+        private static TankStatusDto BuildTank(TankLive t, TankConfigDto cfg, DateTimeOffset readAt)
         {
-            var raw = await cn.QueryFirstOrDefaultAsync("SELECT TOP (1) *, GETDATE() AS DbNow FROM dbo.LivelliSerbatoi ORDER BY Id DESC");
-            if (raw == null) throw new InvalidOperationException("La tabella LivelliSerbatoi è vuota");
-            var row = ToRow(raw);
-
-            long lastId = Convert.ToInt64(row["Id"]);
-            var dbNow = ToUtc((DateTime)row["DbNow"]!);
-            var timestamp = row["DataOra"] is DateTime dataOra ? ToUtc(dataOra) : dbNow;
-
-            var changed = await cn.ExecuteScalarAsync<DateTime?>(@"
-                SELECT MIN(DataOra) FROM dbo.LivelliSerbatoi
-                WHERE Id <= @lastId
-                  AND Id > ISNULL((SELECT TOP (1) Id FROM dbo.LivelliSerbatoi
-                                   WHERE Id < @lastId AND Id >= @lastId - @lookback
-                                     AND (HeartBeat <> @hb OR HeartBeat IS NULL)
-                                   ORDER BY Id DESC), @lastId - @lookback - 1)",
-                new { lastId, lookback = _lookbackRows, hb = Dbl(row, "HeartBeat") });
-
-            return new Snapshot(lastId, row, timestamp, dbNow, changed.HasValue ? ToUtc(changed.Value) : timestamp);
-        }
-
-        private static TankStatusDto BuildTank(string code, Dictionary<string, object?> r, TankConfigDto cfg, DateTimeOffset ts)
-        {
-            bool valid = Bit(r, $"{code}_LevelValid");
-            double? pct = valid ? Dbl(r, $"{code}_LevelPercent") : null;
+            double? pct = t.LevelValid ? Math.Round(t.LevelPercent, 1) : null;
             return new TankStatusDto
             {
-                Code = code,
+                Code = t.Code,
                 Name = cfg.Name,
-                Zone = ZoneOf[code],
+                Zone = ZoneOf[t.Code],
                 CapacityLiters = cfg.CapacityLiters,
-                LevelPercent = pct.HasValue ? Math.Round(pct.Value, 1) : null,
+                LevelPercent = pct,
                 LevelLiters = pct.HasValue ? Math.Round(pct.Value * cfg.CapacityLiters / 100, 0) : null,
-                LevelValid = valid,
-                Full = Bit(r, $"{code}_Full"),
-                TooFull = Bit(r, $"{code}_TooFull"),
-                TooFullFault = Bit(r, $"{code}_TooFullFault"),   // false finché la colonna non esiste
+                LevelValid = t.LevelValid,
+                Full = t.Full,
+                TooFull = t.TooFull,
+                TooFullFault = t.TooFullFault,
                 Thresholds = ThresholdsOf(cfg),
-                Timestamp = ts,
+                Timestamp = readAt,
             };
         }
 
@@ -802,7 +1056,20 @@ namespace ServiceBackend.Model
             LowStopLiters = null,
         };
 
-        // ---------- storico ----------
+        // ---------- allarmi: dalla tabella eventi ----------
+
+        public Task<List<AlarmEventDto>> GetAlarmsAsync(bool activeOnly, DateTimeOffset? from, DateTimeOffset? to, string? code)
+        {
+            if (code != null && !IsValidCode(code)) throw new ArgumentException("Serbatoio non valido", nameof(code));
+            return _events.QueryAsync(activeOnly, from, to, code);
+        }
+
+        // ---------- storico: dalla tabella LivelliSerbatoi (DataOra = ora locale) ----------
+
+        private DateTimeOffset ToUtc(DateTime local) =>
+            new(TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), _sourceZone));
+
+        private DateTime ToLocal(DateTimeOffset utc) => TimeZoneInfo.ConvertTimeFromUtc(utc.UtcDateTime, _sourceZone);
 
         private sealed class BucketRow
         {
@@ -819,10 +1086,9 @@ namespace ServiceBackend.Model
             int bucketSec = Math.Max(60, (int)Math.Ceiling((to - from).TotalSeconds / HistoryPoints));
             var fromLocal = ToLocal(from);
             var toLocal = ToLocal(to);
+            var cfg = (await GetTankConfigAsync()).Single(c => c.Code == code);
 
             using var cn = new SqlConnection(_connectionString);
-            var cfg = (await ReadConfigAsync(cn)).Single(c => c.Code == code);
-
             // {code} è una lettera A-H già validata: è l'unico testo inserito nella query.
             var rows = (await cn.QueryAsync<BucketRow>($@"
                 SELECT DATEDIFF(second, @fromLocal, DataOra) / @bucketSec AS Bucket,
@@ -834,7 +1100,7 @@ namespace ServiceBackend.Model
                 .ToDictionary(r => r.Bucket, r => r.LevelPercent);
 
             int buckets = (int)Math.Ceiling((to - from).TotalSeconds / bucketSec);
-            var samples = new List<LevelSampleDto>(buckets);
+            var samples = new List<LevelSampleDto>(Math.Max(0, buckets));
             for (int b = 0; b < buckets; b++)
             {
                 rows.TryGetValue(b, out var pct);
@@ -849,183 +1115,14 @@ namespace ServiceBackend.Model
             return new TankHistoryDto { Code = code, CapacityLiters = cfg.CapacityLiters, Thresholds = ThresholdsOf(cfg), Samples = samples };
         }
 
-        // ---------- allarmi ----------
-
-        /// <summary>
-        /// Condizione di allarme: colonna "{X}_{Column}" (o "{Column}" se non legata a un serbatoio)
-        /// attiva quando vale ActiveWhen.
-        /// </summary>
-        private sealed record Condition(string Kind, string Column, bool ActiveWhen, string Text)
-        {
-            public string Col(string? code) => code == null ? Column : $"{code}_{Column}";
-            public string ActiveSql(string? code) => $"{Col(code)} = {(ActiveWhen ? 1 : 0)}";
-            // NULL = dato mancante: non apre e non tiene aperto un evento.
-            public string InactiveSql(string? code) => $"ISNULL({Col(code)}, {(ActiveWhen ? 0 : 1)}) = {(ActiveWhen ? 0 : 1)}";
-            public bool IsActive(Dictionary<string, object?> r, string? code) =>
-                r.TryGetValue(Col(code), out var v) && v is bool b && b == ActiveWhen;
-        }
-
-        private static readonly Condition[] Conditions =
-        {
-            new("TOO_FULL", "TooFull", true, "Serbatoio {1}: livello massimo raggiunto"),
-            new("FULL", "Full", true, "Serbatoio {1}: pieno"),
-            new("LEVEL_INVALID", "LevelValid", false, "Serbatoio {1}: misura radar non valida"),
-            // Dopo l'ALTER TABLE di §5.2 aggiungere:
-            // new("TOO_FULL_FAULT", "TooFullFault", true, "Serbatoio {1}: anomalia sensore di massimo livello"),
-        };
-
-        /// <summary>Condizioni non legate a un serbatoio (tankCode = null).</summary>
-        private static readonly Condition[] PlcConditions =
-        {
-            new("PLC_NOT_READY", "PlcReady", false, "PLC non pronto"),
-        };
-
-        public async Task<List<AlarmEventDto>> GetAlarmsAsync(bool activeOnly, DateTimeOffset? from, DateTimeOffset? to, string? code)
-        {
-            var codes = code == null ? Codes : IsValidCode(code) ? new[] { code } : throw new ArgumentException("Serbatoio non valido", nameof(code));
-
-            using var cn = new SqlConnection(_connectionString);
-            var names = (await ReadConfigAsync(cn)).ToDictionary(c => c.Code, c => c.Name);
-
-            return activeOnly
-                ? await ActiveAlarmsAsync(cn, codes, names, includePlc: code == null)
-                : await HistoryAlarmsAsync(cn, codes, names, from ?? DateTimeOffset.UtcNow.AddDays(-7), to ?? DateTimeOffset.UtcNow, includePlc: code == null);
-        }
-
-        private async Task<List<AlarmEventDto>> ActiveAlarmsAsync(SqlConnection cn, string[] codes, Dictionary<string, string> names, bool includePlc)
-        {
-            var snap = await ReadSnapshotAsync(cn);
-            var result = new List<AlarmEventDto>();
-
-            foreach (var c in codes)
-            {
-                foreach (var cond in Conditions)
-                {
-                    if (!cond.IsActive(snap.Row, c)) continue;
-
-                    var start = await cn.ExecuteScalarAsync<DateTime?>($@"
-                        SELECT MIN(DataOra) FROM dbo.LivelliSerbatoi
-                        WHERE Id <= @lastId
-                          AND Id > ISNULL((SELECT TOP (1) Id FROM dbo.LivelliSerbatoi
-                                           WHERE Id <= @lastId AND Id >= @lastId - @lookback
-                                             AND {cond.InactiveSql(c)}
-                                           ORDER BY Id DESC), @lastId - @lookback - 1)",
-                        new { lastId = snap.LastId, lookback = _lookbackRows });
-
-                    result.Add(NewEvent(cond.Kind, c, string.Format(cond.Text, c, names[c]), start.HasValue ? ToUtc(start.Value) : snap.Timestamp, null));
-                }
-            }
-
-            if (includePlc)
-            {
-                foreach (var cond in PlcConditions.Where(c => c.IsActive(snap.Row, null)))
-                {
-                    var start = await cn.ExecuteScalarAsync<DateTime?>($@"
-                        SELECT MIN(DataOra) FROM dbo.LivelliSerbatoi
-                        WHERE Id <= @lastId
-                          AND Id > ISNULL((SELECT TOP (1) Id FROM dbo.LivelliSerbatoi
-                                           WHERE Id <= @lastId AND Id >= @lastId - @lookback
-                                             AND {cond.InactiveSql(null)}
-                                           ORDER BY Id DESC), @lastId - @lookback - 1)",
-                        new { lastId = snap.LastId, lookback = _lookbackRows });
-                    result.Add(NewEvent(cond.Kind, null, cond.Text, start.HasValue ? ToUtc(start.Value) : snap.Timestamp, null));
-                }
-            }
-
-            if (includePlc && (snap.DbNow - snap.HeartbeatChangedAt).TotalSeconds > _heartbeatTimeoutSec)
-            {
-                result.Add(NewEvent("PLC_COMM", null, "Comunicazione PLC interrotta", snap.HeartbeatChangedAt, null));
-            }
-            return result;
-        }
-
-        private sealed class EdgeRow
-        {
-            public string Code { get; set; } = "";
-            public string Kind { get; set; } = "";
-            public DateTime DataOra { get; set; }
-            public int Active { get; set; }
-        }
-
-        private async Task<List<AlarmEventDto>> HistoryAlarmsAsync(SqlConnection cn, string[] codes, Dictionary<string, string> names,
-                                                                    DateTimeOffset from, DateTimeOffset to, bool includePlc)
-        {
-            // Una riga di VALUES per serbatoio e condizione; i codici sono lettere A-H validate.
-            // Le condizioni del PLC usano il codice '' (diventa tankCode = null).
-            var rowsSql = codes.SelectMany(c => Conditions.Select(cond =>
-                    $"('{c}', '{cond.Kind}', CASE WHEN t.{cond.ActiveSql(c)} THEN 1 ELSE 0 END)"))
-                .Concat(includePlc
-                    ? PlcConditions.Select(cond => $"('', '{cond.Kind}', CASE WHEN t.{cond.ActiveSql(null)} THEN 1 ELSE 0 END)")
-                    : Enumerable.Empty<string>());
-            var values = string.Join(",\n", rowsSql);
-
-            var edges = await cn.QueryAsync<EdgeRow>($@"
-                WITH s AS (
-                    SELECT t.Id, t.DataOra, v.Code, v.Kind, v.Active
-                    FROM dbo.LivelliSerbatoi t
-                    CROSS APPLY (VALUES {values}) v (Code, Kind, Active)
-                    WHERE t.DataOra >= @fromLocal AND t.DataOra < @toLocal
-                ),
-                e AS (
-                    SELECT Code, Kind, DataOra, Active,
-                           LAG(Active, 1, 0) OVER (PARTITION BY Code, Kind ORDER BY Id) AS Prev
-                    FROM s
-                )
-                SELECT Code, Kind, DataOra, Active FROM e WHERE Active <> Prev ORDER BY Code, Kind, DataOra",
-                new { fromLocal = ToLocal(from), toLocal = ToLocal(to) }, commandTimeout: 120);
-
-            var result = new List<AlarmEventDto>();
-            foreach (var group in edges.GroupBy(e => (e.Code, e.Kind)))
-            {
-                string? tank = group.Key.Code == "" ? null : group.Key.Code;
-                var text = Conditions.Concat(PlcConditions).First(c => c.Kind == group.Key.Kind).Text;
-                string Message() => tank == null ? text : string.Format(text, tank, names[tank]);
-                DateTimeOffset? raised = null;
-                foreach (var edge in group)
-                {
-                    if (edge.Active == 1) { raised = ToUtc(edge.DataOra); continue; }
-                    if (raised.HasValue)
-                    {
-                        result.Add(NewEvent(group.Key.Kind, tank, Message(), raised.Value, ToUtc(edge.DataOra)));
-                        raised = null;
-                    }
-                }
-                if (raised.HasValue)
-                    result.Add(NewEvent(group.Key.Kind, tank, Message(), raised.Value, null));
-            }
-            return result.OrderByDescending(e => e.RaisedAt).ToList();
-        }
-
-        private static AlarmEventDto NewEvent(string kind, string? code, string message, DateTimeOffset raised, DateTimeOffset? cleared) => new()
-        {
-            // Id stabile tra una chiamata e l'altra: istante di inizio + serbatoio + tipo.
-            Id = raised.ToUnixTimeSeconds() * 1000 + (code == null ? 900 : Array.IndexOf(Codes, code) * 10) + KindIndex(kind),
-            Kind = kind,
-            TankCode = code,
-            Message = message,
-            RaisedAt = raised,
-            ClearedAt = cleared,
-        };
-
-        private static int KindIndex(string kind) => kind switch
-        {
-            "TOO_FULL" => 1, "FULL" => 2, "LEVEL_INVALID" => 3, "TOO_FULL_FAULT" => 4,
-            "PLC_NOT_READY" => 5, "PLC_COMM" => 6, _ => 9,
-        };
-
         // ---------- configurazione ----------
 
         public async Task<List<TankConfigDto>> GetTankConfigAsync()
         {
             using var cn = new SqlConnection(_connectionString);
-            return await ReadConfigAsync(cn);
-        }
-
-        private async Task<List<TankConfigDto>> ReadConfigAsync(SqlConnection cn)
-        {
             var rows = (await cn.QueryAsync<(string Code, string Name, double CapacityLiters, double FullPercent, double TooFullPercent, DateTime? UpdatedAt)>(
                 "SELECT Code, Name, CapacityLiters, FullPercent, TooFullPercent, UpdatedAt FROM dbo.SupTankConfig ORDER BY Code")).ToList();
-            if (rows.Count != Codes.Length) throw new InvalidOperationException("SupTankConfig deve contenere le 8 righe A-H");
+            if (rows.Count != Db4Layout.Codes.Length) throw new InvalidOperationException("SupTankConfig deve contenere le 8 righe A-H");
 
             return rows.Select(r => new TankConfigDto
             {
@@ -1034,7 +1131,6 @@ namespace ServiceBackend.Model
                 CapacityLiters = r.CapacityLiters,
                 FullPercent = r.FullPercent,
                 TooFullPercent = r.TooFullPercent,
-                // UpdatedAt è salvato in UTC (SYSUTCDATETIME)
                 UpdatedAt = r.UpdatedAt.HasValue ? new DateTimeOffset(DateTime.SpecifyKind(r.UpdatedAt.Value, DateTimeKind.Utc)) : null,
             }).ToList();
         }
@@ -1056,54 +1152,219 @@ namespace ServiceBackend.Model
 
         public async Task<List<TankConfigDto>> SaveTankConfigAsync(List<TankConfigDto> changes)
         {
-            using var cn = new SqlConnection(_connectionString);
-            await cn.OpenAsync();
-            using var tx = cn.BeginTransaction();
-            foreach (var c in changes)
+            using (var cn = new SqlConnection(_connectionString))
             {
-                await cn.ExecuteAsync(@"
-                    UPDATE dbo.SupTankConfig
-                    SET Name = @Name, CapacityLiters = @CapacityLiters, FullPercent = @FullPercent,
-                        TooFullPercent = @TooFullPercent, UpdatedAt = SYSUTCDATETIME()
-                    WHERE Code = @Code",
-                    new { c.Code, Name = c.Name.Trim(), c.CapacityLiters, c.FullPercent, c.TooFullPercent }, tx);
+                await cn.OpenAsync();
+                using var tx = cn.BeginTransaction();
+                foreach (var c in changes)
+                {
+                    await cn.ExecuteAsync(@"
+                        UPDATE dbo.SupTankConfig
+                        SET Name = @Name, CapacityLiters = @CapacityLiters, FullPercent = @FullPercent,
+                            TooFullPercent = @TooFullPercent, UpdatedAt = SYSUTCDATETIME()
+                        WHERE Code = @Code",
+                        new { c.Code, Name = c.Name.Trim(), c.CapacityLiters, c.FullPercent, c.TooFullPercent }, tx);
+                }
+                tx.Commit();
             }
-            tx.Commit();
             _logger.LogInformation("Configurazione serbatoi aggiornata: {Codes}", string.Join(",", changes.Select(c => c.Code)));
-            return await ReadConfigAsync(cn);
+            return await GetTankConfigAsync();
         }
     }
 }
 ```
 
-Note sulla bozza:
+Il `TanksController` di §7.7 usa `ServiceBackend.Tanks.TankDal` (aggiungere `using ServiceBackend.Tanks;`).
 
-- `GetSystemStatus` e `GetAlarms?activeOnly=true` sono chiamati ogni 5 s **da ogni browser aperto**.
-  Con più postazioni conviene una cache di 2–3 s (`IMemoryCache`) sul risultato.
-- Un valore NULL non apre né tiene aperto un evento (`IsActive`, `InactiveSql`): conta come dato mancante.
-- `FULL` è uno stato normale per i serbatoi di stoccaggio: se G e H restano pieni, l'avviso resta
-  attivo a lungo e il contatore in barra resta giallo. Da valutare con gli operatori se tenerlo tra gli avvisi.
-- `ToUtc` su un'ora del cambio ora legale → solare (02:00–03:00 dell'ultima domenica di ottobre) sceglie
-  l'ora solare: per un'ora all'anno gli eventi possono risultare spostati di 60 minuti.
+### 7.9 Registrazione in `Program.cs` e `appsettings.json`
 
-### 7.8 Indici e manutenzione della tabella
+Pacchetto NuGet: `S7netplus` (se non si usa la libreria del `PlcService` esistente, §7.2).
+
+```csharp
+using ServiceBackend.Tanks;
+
+builder.Services.Configure<TankPlcOptions>(builder.Configuration.GetSection("TankPlc"));
+builder.Services.AddSingleton<TankLiveState>();
+builder.Services.AddSingleton<TankEventStore>();
+builder.Services.AddHostedService<TankMonitorService>();
+builder.Services.AddScoped<TankDal>();
+```
+
+```json
+"TankPlc": {
+  "Ip": "10.229.48.92",
+  "Rack": 0,
+  "Slot": 1,
+  "DbNumber": 4,
+  "PollIntervalMs": 1000,
+  "ReconnectDelayMs": 5000,
+  "TimeoutMs": 2000,
+  "HeartbeatTimeoutSec": 20
+},
+"Tanks": {
+  "SourceTimeZone": "W. Europe Standard Time"
+}
+```
+
+- `HeartbeatTimeoutSec` deve coincidere con `heartbeatTimeoutSec` del `config.json` del frontend (20)
+  e va scelto in base a **ogni quanto il PLC incrementa l'heartbeat** (punto aperto col softwarista):
+  almeno 3 volte quel periodo.
+- `SourceTimeZone`: fuso di `DataOra` in `LivelliSerbatoi` (nome Windows; su Linux `Europe/Rome`).
+
+### 7.10 IIS: applicazione sempre attiva
+
+Il servizio di lettura vive dentro l'applicazione. Con le impostazioni predefinite di IIS l'applicazione
+si ferma dopo 20 minuti senza richieste e **non registra più eventi** finché qualcuno non apre una pagina.
+
+Nell'application pool del backend:
+
+- **Modalità di avvio** (Start Mode): `AlwaysRunning`;
+- **Timeout di inattività** (Idle Time-out): `0`;
+- **Riciclo** a orario fisso (es. di notte) invece che ogni 1740 minuti.
+
+Nel sito: **Precaricamento abilitato** (Preload Enabled = True), con la funzionalità Windows
+"Inizializzazione applicazioni" installata.
+
+Una sola istanza del backend deve leggere il PLC: niente web garden (più processi nello stesso pool) né
+più server con lo stesso backend. L'indice univoco su `SupTankEvent` evita comunque eventi doppi.
+
+### 7.11 Indici e manutenzione di `LivelliSerbatoi`
 
 ```sql
--- Storico e allarmi filtrano per DataOra
+-- Lo storico filtra per DataOra
 CREATE NONCLUSTERED INDEX IX_LivelliSerbatoi_DataOra
     ON dbo.LivelliSerbatoi (DataOra);
 ```
 
-Volume con una riga al minuto: 1.440 righe al giorno, circa 525.000 all'anno. È poco: l'indice basta
-e le query su 30 giorni leggono circa 43.000 righe. Se l'intervallo scende a pochi secondi, i numeri
-crescono di conseguenza (una riga al secondo = 31,5 milioni all'anno).
-Da decidere con chi gestisce il database:
+Con una riga al minuto: 1.440 righe al giorno, circa 525.000 all'anno; una query su 30 giorni legge
+circa 43.000 righe. Da decidere con chi gestisce il database la **conservazione** (es. 2 anni) e un job
+SQL Agent che cancella le righe più vecchie. Se l'intervallo di scrittura cambia non serve modificare
+il codice: lo storico raggruppa comunque in ~600 punti.
 
-- eventuale cambio della **frequenza di scrittura** (oggi 1 minuto): aggiornare `LookbackRows` e
-  `HeartbeatTimeoutSec` nel backend e `heartbeatTimeoutSec` nel frontend;
-- **conservazione** (es. 2 anni) e un job SQL Agent che cancella le righe più vecchie a blocchi;
-- se lo storico a 30 giorni risulta lento: tabella di medie al minuto riempita da un job, letta dal
-  backend per i periodi lunghi.
+<!--
+=== NON USATO: stato e allarmi letti dalla tabella LivelliSerbatoi, e ipotesi AVEVA Historian ===
+Superato: lo stato si legge dal PLC e gli eventi li scrive il backend (§7.1). Tenuto come riferimento.
+
+Query sulla tabella LivelliSerbatoi per stato e allarmi (superate dalla lettura del PLC):
+
+**Stato attuale.** Ultima riga, più l'ora del server SQL (stesso orologio di `DataOra`, così l'età
+dell'heartbeat non dipende dall'orologio del server web):
+
+```sql
+SELECT TOP (1) *, GETDATE() AS DbNow
+FROM dbo.LivelliSerbatoi
+ORDER BY Id DESC;
+```
+
+**Ora dell'ultimo cambio dell'heartbeat.** Prima riga dopo l'ultima con heartbeat diverso, cercando
+nelle ultime `@lookbackRows` righe (se non cambia mai in quella finestra, risulta l'ora più vecchia
+della finestra e il frontend mostra "Com. persa"):
+
+```sql
+SELECT MIN(DataOra)
+FROM dbo.LivelliSerbatoi
+WHERE Id <= @lastId
+  AND Id > ISNULL((SELECT TOP (1) Id FROM dbo.LivelliSerbatoi
+                   WHERE Id < @lastId AND Id >= @lastId - @lookbackRows
+                     AND (HeartBeat <> @hb OR HeartBeat IS NULL)
+                   ORDER BY Id DESC),
+                  @lastId - @lookbackRows - 1);
+```
+
+Se System Platform smette di scrivere, l'ultima riga invecchia e l'heartbeat risulta fermo: il
+frontend lo segnala come comunicazione persa.
+
+**Storico di un serbatoio** (`{X}` = lettera validata; `@bucketSec` = durata periodo / 600, minimo 60):
+
+```sql
+SELECT DATEDIFF(second, @fromLocal, DataOra) / @bucketSec AS Bucket,
+       AVG(CASE WHEN {X}_LevelValid = 1 THEN {X}_LevelPercent END) AS LevelPercent
+FROM dbo.LivelliSerbatoi
+WHERE DataOra >= @fromLocal AND DataOra < @toLocal
+GROUP BY DATEDIFF(second, @fromLocal, DataOra) / @bucketSec;
+```
+
+Il backend crea poi un campione per ogni intervallo fino a "adesso": intervalli senza righe o con sola
+misura non valida → valore null (il grafico mostra il buco invece di unire i punti).
+
+**Eventi di allarme nel periodo.** Una riga per ogni cambio di stato, per serbatoio e tipo:
+
+```sql
+WITH s AS (
+    SELECT t.Id, t.DataOra, v.Code, v.Kind, v.Active
+    FROM dbo.LivelliSerbatoi t
+    CROSS APPLY (VALUES
+        ('A', 'TOO_FULL',      CASE WHEN t.A_TooFull = 1    THEN 1 ELSE 0 END),
+        ('A', 'FULL',          CASE WHEN t.A_Full = 1       THEN 1 ELSE 0 END),
+        ('A', 'LEVEL_INVALID', CASE WHEN t.A_LevelValid = 0 THEN 1 ELSE 0 END),
+        -- ... B-H; con le colonne X_TooFullFault anche ('X', 'TOO_FULL_FAULT', ...)
+        ('',  'PLC_NOT_READY', CASE WHEN t.PlcReady = 0     THEN 1 ELSE 0 END)   -- '' = non legato a un serbatoio
+    ) v (Code, Kind, Active)
+    WHERE t.DataOra >= @fromLocal AND t.DataOra < @toLocal
+),
+e AS (
+    SELECT Code, Kind, DataOra, Active,
+           LAG(Active, 1, 0) OVER (PARTITION BY Code, Kind ORDER BY Id) AS Prev
+    FROM s
+)
+SELECT Code, Kind, DataOra, Active
+FROM e
+WHERE Active <> Prev
+ORDER BY Code, Kind, DataOra;
+```
+
+Il backend accoppia i fronti: `Active = 1` → `raisedAt`, il successivo `Active = 0` → `clearedAt`,
+nessun rientro → evento ancora attivo. Un evento già attivo all'inizio del periodo risulta iniziato
+alla prima riga del periodo. La query si costruisce nel codice per i soli serbatoi richiesti (§7.7).
+
+**Allarmi attivi** (`activeOnly=true`, chiamato ogni 5 s): non serve rileggere giorni di righe.
+Dall'ultima riga si vede cosa è attivo; per ognuno si cerca da quando:
+
+```sql
+-- inizio dell'evento: prima riga dopo l'ultima in cui la condizione era falsa
+SELECT MIN(DataOra)
+FROM dbo.LivelliSerbatoi
+WHERE Id <= @lastId
+  AND Id > ISNULL((SELECT TOP (1) Id FROM dbo.LivelliSerbatoi
+                   WHERE Id <= @lastId AND Id >= @lastId - @lookbackRows
+                     AND ISNULL({X}_TooFull, 0) = 0          -- per LEVEL_INVALID: ISNULL({X}_LevelValid, 1) = 1
+                   ORDER BY Id DESC),
+                  @lastId - @lookbackRows - 1);
+```
+
+`PLC_NOT_READY` segue lo stesso schema sulla colonna `PlcReady` (attivo quando vale 0).
+`PLC_COMM` attivo = heartbeat fermo oltre `HeartbeatTimeoutSec` (stesso calcolo dello stato). Nello storico
+`PLC_COMM` non viene ricostruito: richiederebbe di cercare i buchi dell'heartbeat su tutto il periodo.
+
+
+=== NON USATO: ipotesi AVEVA Historian (superata dalla tabella LivelliSerbatoi) ===
+
+Se in futuro i dati venissero letti dall'Historian invece che dalla tabella, lo schema tipico è il
+database Runtime con le viste Live e History; esempi indicativi, da verificare:
+
+-- ultimo valore (Live): DateTime = ora dell'ultimo cambio per i tag a delta
+SELECT TagName, Value, DateTime, QualityDetail
+FROM Runtime.dbo.Live
+WHERE TagName IN ('<tag A_LevelPercent>', '<tag A_LevelValid>', ...);
+
+-- storico ricampionato: ~600 punti nell'intervallo
+SELECT DateTime, Value, QualityDetail
+FROM Runtime.dbo.History
+WHERE TagName = '<tag A_LevelPercent>'
+  AND DateTime >= @from AND DateTime <= @to
+  AND wwRetrievalMode = 'Cyclic'
+  AND wwResolution = @resolutionMs;   -- (to - from) / 600, minimo 60000
+
+-- cambi di un bit (per ricostruire gli eventi)
+SELECT DateTime, Value FROM Runtime.dbo.History
+WHERE TagName = '<tag A_TooFull>' AND DateTime >= @from AND DateTime <= @to
+  AND wwRetrievalMode = 'Delta';
+
+Note: su alcune installazioni si passa da OPENQUERY(INSQL, '...'), che non accetta parametri;
+verificare il fuso dei timestamp (wwTimeZone); nomi dei tag in configurazione, non nel codice.
+I requisiti di storicizzazione (heartbeat e bit registrati a ogni cambio, deadband piccolo sul
+livello) valgono anche per la frequenza di scrittura della tabella LivelliSerbatoi.
+-->
 
 ## 8. Backend esistente: cosa sappiamo e cosa è stato proposto
 
@@ -1134,14 +1395,17 @@ Queste modifiche sono **fuori dal perimetro serbatoi**: riguardano il backend OE
 
 ## 9. Punti aperti
 
-Da chiarire per il backend (tabella `LivelliSerbatoi`):
+Da chiarire per il backend:
 
-1. **Colonne `X_TooFullFault` mancanti** (attività, non domanda): eseguire l'`ALTER TABLE` di §5.2
-   e chiedere a chi configura System Platform di scriverci i bit `X_TooFullFault` del DB4.
-2. **Casing del JSON** del backend (camelCase atteso).
+1. **Accesso S7 al PLC 10.229.48.92**: PUT/GET abilitato sul 1214C; porta TCP 102 raggiungibile dal
+   server del backend (firewall / reti separate).
+2. **Libreria S7**: confermare S7netplus o usare quella del `PlcService` esistente (§7.2).
+3. **Ogni quanto il PLC incrementa `Heartbeat`**: determina `HeartbeatTimeoutSec` (oggi 20 s).
+4. **Application pool sempre attivo** su IIS, una sola istanza (§7.10).
+5. **Casing del JSON** del backend (camelCase atteso).
 
-Già chiariti: una riga al minuto (potrà variare, parametri in configurazione); `DataOra` = ora locale
-del server SQL (`getdate()`).
+Già chiariti: tabella `LivelliSerbatoi` una riga al minuto (potrà variare); `DataOra` = ora locale del
+server SQL; eventi di allarme scritti dal backend.
 
 Da chiudere con il softwarista PLC (documento "Punti aperti PLC – Supervisione serbatoi",
 https://claude.ai/code/artifact/9e2b08a4-2986-4d84-9e1e-e35eda396f5e):
@@ -1159,8 +1423,8 @@ Altri:
 - **Prestazioni del trend comparato**: 8 serbatoi × 30 giorni = 8 richieste in parallelo; se lento,
   aggiungere un endpoint che restituisce più serbatoi insieme.
 - **Rabbocco** del serbatoio A (presente nel vecchio supervisore, assente nel DB4).
-- **Allarmi**: la tabella non ha eventi; il backend li ricostruisce dai cambi dei bit. Se in futuro
-  gli allarmi venissero gestiti in System Platform, si potrà leggere il suo database allarmi.
+- **Eventi persi a backend fermo**: durante un riavvio o un aggiornamento del backend gli eventi non
+  vengono registrati; per ridurre il buco, aggiornamenti fuori dagli orari di riempimento.
 
 ## 10. Messa in produzione del frontend
 
@@ -1199,10 +1463,12 @@ Altri:
 
 ## 11. Checklist per chiudere il backend
 
-- [ ] Eseguire `ALTER TABLE` per `X_TooFullFault` e `HeartBeat bigint` e farle popolare (§5.2)
-- [ ] Creare l'indice su `DataOra` (§7.8) e la tabella `SupTankConfig` con i valori iniziali (§7.3)
-- [ ] Aggiungere DTO, `TankDal`, `TanksController`, registrazione e sezione `Tanks` in `appsettings.json` (§7.4–7.7)
+- [ ] Abilitare PUT/GET sul PLC 10.229.48.92 e verificare la porta 102 dal server del backend (§7.2)
+- [ ] Creare `SupTankConfig` (con i valori iniziali) e `SupTankEvent` (§7.4, §7.5)
+- [ ] Creare l'indice su `DataOra` di `LivelliSerbatoi`; `HeartBeat` a `bigint` (§7.11, §5.2)
+- [ ] Aggiungere pacchetto S7, DTO, classi `ServiceBackend.Tanks`, `TanksController`, registrazione e sezioni `TankPlc`/`Tanks` in `appsettings.json` (§7.6–7.9)
+- [ ] Application pool sempre attivo, una sola istanza (§7.10)
 - [ ] Verificare camelCase e date con fuso nelle risposte
 - [ ] Provare ogni endpoint da Swagger, poi con il frontend (`useMock: false`)
-- [ ] Controllare: sinottico aggiornato ogni 5 s, "Com. persa" fermando la scrittura della tabella, trend 30 giorni, allarmi storici, salvataggio configurazione
+- [ ] Controllare: valori del sinottico uguali a quelli in TIA Portal; "Com. persa" staccando il PLC; evento aperto e chiuso in `SupTankEvent` simulando un troppo pieno; trend 30 giorni; salvataggio configurazione
 - [ ] Pubblicare frontend su IIS con `web.config` e CORS (§10)

@@ -28,7 +28,7 @@ senza ricompilare.
 | `useMock` | `true` = dati simulati, nessuna chiamata al backend |
 | `pollingIntervalMs` | intervallo di aggiornamento del sinottico |
 | `staleDataAfterSec` | oltre questa età l'ultimo dato è segnalato come non aggiornato |
-| `heartbeatTimeoutSec` | se l'heartbeat PLC non cambia entro questo tempo: "Com. persa". Circa 3 × l'intervallo di scrittura della tabella (1 min → 180 s) |
+| `heartbeatTimeoutSec` | se l'heartbeat PLC non cambia entro questo tempo: "Com. persa". Uguale a `TankPlc:HeartbeatTimeoutSec` del backend (20 s) |
 
 ## Struttura
 
@@ -88,9 +88,9 @@ I tipi sono definiti in `src/app/core/models/tank.models.ts`. Corrispondenza con
 | `X_TooFullFault` | `tooFullFault` |
 | `Horn_AB` … `Horn_GH` | `SystemStatus.horns` |
 
-Il backend legge questi valori dalla tabella SQL `dana_verniciatura.dbo.LivelliSerbatoi`, scritta da
-System Platform. La tabella oggi **non ha** le colonne `X_TooFullFault`: finché non vengono aggiunte,
-`tooFullFault` arriva sempre `false`. Dettagli in `docs/HANDOFF-backend.md`.
+Il backend legge questi valori **direttamente dal PLC 10.229.48.92 via S7** (stato in diretta ed eventi
+di allarme, che registra nella tabella `SupTankEvent`); la tabella `dana_verniciatura.dbo.LivelliSerbatoi`,
+scritta da System Platform una volta al minuto, serve solo per i trend. Dettagli in `docs/HANDOFF-backend.md`.
 
 La capacità non è nel DB4: la fornisce il backend da configurazione (oggi 10.000 l per serbatoio).
 
