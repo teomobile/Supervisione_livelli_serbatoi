@@ -1,13 +1,17 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 /**
  * Configurazione letta a runtime da /config.json.
- * Permette di cambiare URL del backend o passare ai dati mock
- * modificando il file su IIS, senza ricompilare.
+ * Permette di cambiare i parametri o passare ai dati mock modificando il file su IIS, senza ricompilare.
  */
 export interface AppConfig {
+  /**
+   * URL delle API. Predefinito: baseUrl dell'environment (environment.ts in sviluppo,
+   * environment.prod.ts in produzione) + "/api"; se presente in config.json ha la precedenza.
+   */
   apiBaseUrl: string;
   useMock: boolean;
   /** Intervallo di aggiornamento del sinottico. */
@@ -22,7 +26,7 @@ export interface AppConfig {
 }
 
 const DEFAULTS: AppConfig = {
-  apiBaseUrl: '/api',
+  apiBaseUrl: `${environment.baseUrl}/api`,
   useMock: false,
   pollingIntervalMs: 5000,
   staleDataAfterSec: 30,

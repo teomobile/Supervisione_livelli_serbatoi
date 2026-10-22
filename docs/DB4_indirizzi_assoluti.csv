@@ -1,0 +1,48 @@
+﻿Nome;Tipo PLC;Offset;Indirizzo S7;Item OI.SIEMENS / SIDirect;Tipo attributo SP;Commento
+DataVersion;UInt;0.0;DB4.DBW0;DB4,W0;Integer;Versione struttura DB gestionale
+PLCReady;Bool;2.0;DB4.DBX2.0;DB4,X2.0;Boolean;PLC operativo e programma in esecuzione
+Heartbeat;UDInt;4.0;DB4.DBD4;DB4,D4;Integer;Contatore ciclico per verifica comunicazione PLC
+A_LevelPercent;Real;8.0;DB4.DBD8;DB4,REAL8;Float;Livello serbatoio A [%]
+A_LevelValid;Bool;12.0;DB4.DBX12.0;DB4,X12.0;Boolean;Misura livello serbatoio A valida
+A_Full;Bool;12.1;DB4.DBX12.1;DB4,X12.1;Boolean;Serbatoio A pieno secondo soglia radar
+A_TooFull;Bool;12.2;DB4.DBX12.2;DB4,X12.2;Boolean;Serbatoio A livello massimo raggiunto - sensore TooFull
+A_TooFullFault;Bool;12.3;DB4.DBX12.3;DB4,X12.3;Boolean;Anomalia sensore massimo livello serbatoio A
+B_LevelPercent;Real;14.0;DB4.DBD14;DB4,REAL14;Float;Livello serbatoio B [%]
+B_LevelValid;Bool;18.0;DB4.DBX18.0;DB4,X18.0;Boolean;Misura livello serbatoio B valida
+B_Full;Bool;18.1;DB4.DBX18.1;DB4,X18.1;Boolean;Serbatoio B pieno secondo soglia radar
+B_TooFull;Bool;18.2;DB4.DBX18.2;DB4,X18.2;Boolean;Serbatoio B livello massimo raggiunto - sensore TooFull
+B_TooFullFault;Bool;18.3;DB4.DBX18.3;DB4,X18.3;Boolean;Anomalia sensore massimo livello serbatoio B
+C_LevelPercent;Real;20.0;DB4.DBD20;DB4,REAL20;Float;Livello serbatoio C [%]
+C_LevelValid;Bool;24.0;DB4.DBX24.0;DB4,X24.0;Boolean;Misura livello serbatoio C valida
+C_Full;Bool;24.1;DB4.DBX24.1;DB4,X24.1;Boolean;Serbatoio C pieno secondo soglia radar
+C_TooFull;Bool;24.2;DB4.DBX24.2;DB4,X24.2;Boolean;Serbatoio C livello massimo raggiunto - sensore TooFull
+C_TooFullFault;Bool;24.3;DB4.DBX24.3;DB4,X24.3;Boolean;Anomalia sensore massimo livello serbatoio C
+D_LevelPercent;Real;26.0;DB4.DBD26;DB4,REAL26;Float;Livello serbatoio D [%]
+D_LevelValid;Bool;30.0;DB4.DBX30.0;DB4,X30.0;Boolean;Misura livello serbatoio D valida
+D_Full;Bool;30.1;DB4.DBX30.1;DB4,X30.1;Boolean;Serbatoio D pieno secondo soglia radar
+D_TooFull;Bool;30.2;DB4.DBX30.2;DB4,X30.2;Boolean;Serbatoio D livello massimo raggiunto - sensore TooFull
+D_TooFullFault;Bool;30.3;DB4.DBX30.3;DB4,X30.3;Boolean;Anomalia sensore massimo livello serbatoio D
+E_LevelPercent;Real;32.0;DB4.DBD32;DB4,REAL32;Float;Livello serbatoio E [%]
+E_LevelValid;Bool;36.0;DB4.DBX36.0;DB4,X36.0;Boolean;Misura livello serbatoio E valida
+E_Full;Bool;36.1;DB4.DBX36.1;DB4,X36.1;Boolean;Serbatoio E pieno secondo soglia radar
+E_TooFull;Bool;36.2;DB4.DBX36.2;DB4,X36.2;Boolean;Serbatoio E livello massimo raggiunto - sensore TooFull
+E_TooFullFault;Bool;36.3;DB4.DBX36.3;DB4,X36.3;Boolean;Anomalia sensore massimo livello serbatoio E
+F_LevelPercent;Real;38.0;DB4.DBD38;DB4,REAL38;Float;Livello serbatoio F [%]
+F_LevelValid;Bool;42.0;DB4.DBX42.0;DB4,X42.0;Boolean;Misura livello serbatoio F valida
+F_Full;Bool;42.1;DB4.DBX42.1;DB4,X42.1;Boolean;Serbatoio F pieno secondo soglia radar
+F_TooFull;Bool;42.2;DB4.DBX42.2;DB4,X42.2;Boolean;Serbatoio F livello massimo raggiunto - sensore TooFull
+F_TooFullFault;Bool;42.3;DB4.DBX42.3;DB4,X42.3;Boolean;Anomalia sensore massimo livello serbatoio F
+G_LevelPercent;Real;44.0;DB4.DBD44;DB4,REAL44;Float;Livello serbatoio G [%]
+G_LevelValid;Bool;48.0;DB4.DBX48.0;DB4,X48.0;Boolean;Misura livello serbatoio G valida
+G_Full;Bool;48.1;DB4.DBX48.1;DB4,X48.1;Boolean;Serbatoio G pieno secondo soglia radar
+G_TooFull;Bool;48.2;DB4.DBX48.2;DB4,X48.2;Boolean;Serbatoio G livello massimo raggiunto - sensore TooFull
+G_TooFullFault;Bool;48.3;DB4.DBX48.3;DB4,X48.3;Boolean;Anomalia sensore massimo livello serbatoio G
+H_LevelPercent;Real;50.0;DB4.DBD50;DB4,REAL50;Float;Livello serbatoio H [%]
+H_LevelValid;Bool;54.0;DB4.DBX54.0;DB4,X54.0;Boolean;Misura livello serbatoio H valida
+H_Full;Bool;54.1;DB4.DBX54.1;DB4,X54.1;Boolean;Serbatoio H pieno secondo soglia radar
+H_TooFull;Bool;54.2;DB4.DBX54.2;DB4,X54.2;Boolean;Serbatoio H livello massimo raggiunto - sensore TooFull
+H_TooFullFault;Bool;54.3;DB4.DBX54.3;DB4,X54.3;Boolean;Anomalia sensore massimo livello serbatoio H
+Horn_AB;Bool;54.4;DB4.DBX54.4;DB4,X54.4;Boolean;Sirena zona serbatoi A-B attiva
+Horn_CD;Bool;54.5;DB4.DBX54.5;DB4,X54.5;Boolean;Sirena zona serbatoi C-D attiva
+Horn_EF;Bool;54.6;DB4.DBX54.6;DB4,X54.6;Boolean;Sirena zona serbatoi E-F attiva
+Horn_GH;Bool;54.7;DB4.DBX54.7;DB4,X54.7;Boolean;Sirena zona serbatoi G-H attiva

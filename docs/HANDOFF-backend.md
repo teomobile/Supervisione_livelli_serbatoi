@@ -1,12 +1,13 @@
 # Supervisione livelli serbatoi — riepilogo per completare il backend
 
-Stato al 19/10/2026. Il **frontend è completo e gira con dati simulati**; il **backend non è ancora
-scritto**. Sorgenti decise: dati in diretta dal **PLC 10.229.48.92 via S7**, storico dei livelli dalla
-tabella `dana_verniciatura.dbo.LivelliSerbatoi`, eventi di allarme scritti dal backend in `SupTankEvent`. Questo documento contiene tutto quello che serve per scriverlo: architettura, contratto API,
-mappatura del DB PLC, decisioni prese, codice di partenza e punti aperti.
+Stato al 21/10/2026. Il **frontend è completo**; il **backend è scritto** (§7.12) e provato con PLC
+simulato e un database di prova, **non ancora** con il PLC e il database reali. Sorgenti: dati in diretta
+dal **PLC 10.229.48.92 via S7**, storico dei livelli dalla tabella `dana_verniciatura.dbo.LivelliSerbatoi`,
+eventi di allarme scritti dal backend in `SupTankEvent`. Questo documento contiene architettura, contratto
+API, mappatura del DB PLC, decisioni prese e punti aperti.
 
-> Nessun codice C# di questo documento è stato compilato: il progetto ServiceBackend non era
-> disponibile nella sessione in cui è stato scritto. Va trattato come bozza da verificare.
+> Il codice delle sezioni 7.6–7.9 è la bozza da cui è partita l'implementazione: il codice in uso è nel
+> ServiceBackend (§7.12), che se ne discosta in alcuni punti.
 
 ---
 
@@ -39,7 +40,8 @@ tacitazione sirene, travaso), dopo l'introduzione dell'autenticazione (§9).
   (nessuna pull request aperta).
 - `frontend/` — progetto Angular completo, con `frontend/README.md` (dettagli tecnici del frontend).
 - `docs/HANDOFF-backend.md` — questo documento.
-- Il backend (ServiceBackend) **non è** nel repository.
+- Il backend (ServiceBackend) **non è** in questo repository: è nel repository del ServiceBackend
+  (`ServiceRestDana/ServiceBackend`), file della supervisione serbatoi elencati in §7.12.
 
 Commit principali (dal più vecchio):
 
@@ -1241,6 +1243,59 @@ circa 43.000 righe. Da decidere con chi gestisce il database la **conservazione*
 SQL Agent che cancella le righe più vecchie. Se l'intervallo di scrittura cambia non serve modificare
 il codice: lo storico raggruppa comunque in ~600 punti.
 
+### 7.12 Implementazione nel ServiceBackend
+
+File (namespace `ServiceBackend.Models.Tanks`, cartella `Models/Tanks/`):
+
+| File | Contenuto |
+|---|---|
+| `TankOptions.cs` | `TankPlcOptions` (sezione `TankPlc`) e `TankOptions` (sezione `Tanks`) |
+| `Db4Layout.cs` | decodifica dei 55 byte (`Parse`) e codifica inversa (`Encode`, usata dal PLC simulato) |
+| `TankPlcReader.cs` | `ITankPlcReader`: `S7TankPlcReader` (S7netplus, già nel progetto) e `SimulatedTankPlcReader` |
+| `TankLiveState.cs` | ultima lettura in memoria |
+| `TankEventStore.cs` | `SupTankEvent` |
+| `TankMonitorService.cs` | servizio in background: lettura ciclica ed eventi |
+| `TankDal.cs` | stato, allarmi, trend, configurazione |
+| `TankDtos.cs` | DTO e costanti `AlarmKinds` |
+| `Controllers/TanksController.cs` | i 5 endpoint |
+| `Database/SupTankConfig.sql`, `SupTankEvent.sql`, `LivelliSerbatoi.sql` | script (§7.4, §7.5, §7.11, §5.2) |
+
+La cartella degli script si chiama `Database` e non `Sql` perché il `.gitignore` del progetto esclude
+`sql`.
+
+Differenze rispetto alla bozza:
+
+- **PLC simulato** con `"TankPlc": { "Simulate": true }`, per lo sviluppo senza accesso al PLC:
+  - livelli sinusoidali, con F che supera il 95 %;
+  - E con misura non valida dal minuto 10 al 12 di ogni ora;
+  - D con guasto sensore nei primi 5 minuti di ogni mezz'ora;
+  - heartbeat fermo nel minuto 50 di ogni ora.
+- **Il database non blocca la lettura del PLC:** se gli eventi aperti non si possono caricare,
+  la lettura e lo stato funzionano lo stesso e il caricamento si riprova ogni 10 s.
+- **Log:** errori del PLC e del database scritti solo al primo fallimento e al ripristino, non a ogni ciclo.
+- **PLC mai letto dall'avvio:** `GetSystemStatus` risponde `statusCode` 503 con il messaggio, senza
+  errore nel log.
+- **Configurazione:** se `SupTankConfig` non è leggibile, stato e trend usano i valori predefiniti
+  (riprova dopo un minuto). Se manca una riga, quel serbatoio ha i valori predefiniti; il salvataggio la inserisce.
+- **Validazione:** errori con HTTP 200 e `statusCode` 400; periodo massimo 400 giorni; codici serbatoio
+  ripetuti rifiutati.
+- **`SupTankEvent.sql`** imposta `QUOTED_IDENTIFIER ON`: con `sqlcmd` l'indice filtrato altrimenti non si crea.
+
+Prove fatte con il PLC simulato e il database di prova SQL Server LocalDB `SupTankTest`, con
+`LivelliSerbatoi` di 30 giorni a una riga al minuto:
+- stato;
+- allarmi attivi e storico, con filtro sul serbatoio;
+- trend 8 h, 24 h, 30 giorni (600 punti, conversione corretta dell'ora locale);
+- salvataggio e validazione della configurazione;
+- PLC irraggiungibile: `PLC_COMM` aperto, stato 503;
+- ripristino: `PLC_COMM` e gli eventi rientrati chiusi alla prima lettura, nessun duplicato;
+- frontend con `useMock: false`: sinottico, allarmi e dettaglio.
+
+Non ancora provato:
+- lettura S7 dal 1214C reale;
+- database `dana_verniciatura` reale;
+- `PLC_COMM` con PLC raggiungibile ma heartbeat fermo.
+
 <!--
 === NON USATO: stato e allarmi letti dalla tabella LivelliSerbatoi, e ipotesi AVEVA Historian ===
 Superato: lo stato si legge dal PLC e gli eventi li scrive il backend (§7.1). Tenuto come riferimento.
@@ -1399,10 +1454,10 @@ Da chiarire per il backend:
 
 1. **Accesso S7 al PLC 10.229.48.92**: PUT/GET abilitato sul 1214C; porta TCP 102 raggiungibile dal
    server del backend (firewall / reti separate).
-2. **Libreria S7**: confermare S7netplus o usare quella del `PlcService` esistente (§7.2).
-3. **Ogni quanto il PLC incrementa `Heartbeat`**: determina `HeartbeatTimeoutSec` (oggi 20 s).
-4. **Application pool sempre attivo** su IIS, una sola istanza (§7.10).
-5. **Casing del JSON** del backend (camelCase atteso).
+2. **Ogni quanto il PLC incrementa `Heartbeat`**: determina `HeartbeatTimeoutSec` (oggi 20 s).
+3. **Application pool sempre attivo** su IIS, una sola istanza (§7.10).
+
+Chiusi: libreria S7 = S7netplus, già usata dal `PlcService`; JSON in camelCase (verificato).
 
 Già chiariti: tabella `LivelliSerbatoi` una riga al minuto (potrà variare); `DataOra` = ora locale del
 server SQL; eventi di allarme scritti dal backend.
@@ -1464,11 +1519,12 @@ Altri:
 ## 11. Checklist per chiudere il backend
 
 - [ ] Abilitare PUT/GET sul PLC 10.229.48.92 e verificare la porta 102 dal server del backend (§7.2)
-- [ ] Creare `SupTankConfig` (con i valori iniziali) e `SupTankEvent` (§7.4, §7.5)
-- [ ] Creare l'indice su `DataOra` di `LivelliSerbatoi`; `HeartBeat` a `bigint` (§7.11, §5.2)
-- [ ] Aggiungere pacchetto S7, DTO, classi `ServiceBackend.Tanks`, `TanksController`, registrazione e sezioni `TankPlc`/`Tanks` in `appsettings.json` (§7.6–7.9)
+- [ ] Creare `SupTankConfig` (con i valori iniziali) e `SupTankEvent` su `dana_verniciatura`: script in `Database/` (§7.12)
+- [ ] Creare l'indice su `DataOra` di `LivelliSerbatoi`; `HeartBeat` a `bigint` (`Database/LivelliSerbatoi.sql`, da concordare)
+- [x] Aggiungere DTO, classi, `TanksController`, registrazione e sezioni `TankPlc`/`Tanks` in `appsettings.json` (§7.12)
 - [ ] Application pool sempre attivo, una sola istanza (§7.10)
-- [ ] Verificare camelCase e date con fuso nelle risposte
-- [ ] Provare ogni endpoint da Swagger, poi con il frontend (`useMock: false`)
+- [x] Verificare camelCase e date con fuso nelle risposte
+- [x] Provare ogni endpoint, poi con il frontend (`useMock: false`), con PLC simulato e database di prova
+- [ ] Ripetere la prova con il PLC e il database reali
 - [ ] Controllare: valori del sinottico uguali a quelli in TIA Portal; "Com. persa" staccando il PLC; evento aperto e chiuso in `SupTankEvent` simulando un troppo pieno; trend 30 giorni; salvataggio configurazione
 - [ ] Pubblicare frontend su IIS con `web.config` e CORS (§10)

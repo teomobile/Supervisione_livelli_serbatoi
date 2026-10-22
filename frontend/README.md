@@ -17,6 +17,15 @@ npm test           # unit test (Vitest)
 npm run build      # output in dist/supervisione-serbatoi/browser
 ```
 
+## URL del backend
+
+In `src/app/environments/`, come negli altri progetti:
+
+| File | Build | `baseUrl` |
+|---|---|---|
+| `environment.ts` | `npm start`, build `development` | `https://localhost:44315` (ServiceBackend da Visual Studio) |
+| `environment.prod.ts` | `npm run build` (production, tramite `fileReplacements`) | `http://10.229.48.220:89` |
+
 ## Configurazione a runtime
 
 `public/config.json` viene letto all'avvio e copiato così com'è nella build: su IIS si modifica
@@ -24,7 +33,7 @@ senza ricompilare.
 
 | Chiave | Significato |
 |---|---|
-| `apiBaseUrl` | URL base delle API del ServiceBackend (es. `http://server:5000/api`) |
+| `apiBaseUrl` | Facoltativo. URL delle API del ServiceBackend fino a `/api`; se manca vale `baseUrl` dell'environment + `/api` |
 | `useMock` | `true` = dati simulati, nessuna chiamata al backend |
 | `pollingIntervalMs` | intervallo di aggiornamento del sinottico |
 | `staleDataAfterSec` | oltre questa età l'ultimo dato è segnalato come non aggiornato |
