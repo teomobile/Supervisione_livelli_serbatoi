@@ -331,8 +331,13 @@ Requisiti lato PLC e rete:
 - il server del backend deve raggiungere **10.229.48.92 sulla porta TCP 102**;
 - S7-1200: rack 0, slot 1 (in configurazione).
 
-Libreria proposta: **S7netplus** (pacchetto NuGet `S7netplus`). Se il `PlcService` esistente usa
-un'altra libreria S7 (es. Sharp7), si può usare quella: cambia solo la classe che legge i byte.
+Libreria: **S7netplus**, già usata dal `PlcService` esistente (nessun pacchetto nuovo). Il servizio
+serbatoi crea **un proprio oggetto `Plc`** verso 10.229.48.92: non condivide l'istanza del `PlcService`,
+che punta a un altro PLC e non va toccata (un oggetto `Plc` di S7netplus non va usato da più thread).
+
+La bozza usa `OpenAsync`, `ReadBytesAsync` con `CancellationToken` e le proprietà `ReadTimeout` /
+`WriteTimeout`: verificare che ci siano nella versione di S7netplus del progetto; nelle versioni più
+vecchie si usano i metodi sincroni `Open()` / `ReadBytes(...)` dentro `Task.Run`.
 
 Una lettura = **55 byte** del DB4 (offset 0–54), poi si decodificano. Tutti i valori S7 sono big-endian:
 
@@ -1180,7 +1185,7 @@ Il `TanksController` di §7.7 usa `ServiceBackend.Tanks.TankDal` (aggiungere `us
 
 ### 7.9 Registrazione in `Program.cs` e `appsettings.json`
 
-Pacchetto NuGet: `S7netplus` (se non si usa la libreria del `PlcService` esistente, §7.2).
+Pacchetto NuGet: `S7netplus`, già presente nel progetto.
 
 ```csharp
 using ServiceBackend.Tanks;
@@ -1208,9 +1213,9 @@ builder.Services.AddScoped<TankDal>();
 }
 ```
 
-- `HeartbeatTimeoutSec` deve coincidere con `heartbeatTimeoutSec` del `config.json` del frontend (20)
-  e va scelto in base a **ogni quanto il PLC incrementa l'heartbeat** (punto aperto col softwarista):
-  almeno 3 volte quel periodo.
+- `HeartbeatTimeoutSec` deve coincidere con `heartbeatTimeoutSec` del `config.json` del frontend (20).
+  Il PLC incrementa l'heartbeat **ogni 5 s**: 20 s = 4 incrementi mancati prima di segnalare
+  "Com. persa". Se il periodo del PLC cambia, tenere il timeout ad almeno 3 volte il periodo.
 - `SourceTimeZone`: fuso di `DataOra` in `LivelliSerbatoi` (nome Windows; su Linux `Europe/Rome`).
 
 ### 7.10 IIS: applicazione sempre attiva
@@ -1454,13 +1459,19 @@ Da chiarire per il backend:
 
 1. **Accesso S7 al PLC 10.229.48.92**: PUT/GET abilitato sul 1214C; porta TCP 102 raggiungibile dal
    server del backend (firewall / reti separate).
+<<<<<<< HEAD
 2. **Ogni quanto il PLC incrementa `Heartbeat`**: determina `HeartbeatTimeoutSec` (oggi 20 s).
 3. **Application pool sempre attivo** su IIS, una sola istanza (§7.10).
 
 Chiusi: libreria S7 = S7netplus, già usata dal `PlcService`; JSON in camelCase (verificato).
+=======
+2. **Application pool sempre attivo** su IIS, una sola istanza (§7.10).
+3. **Casing del JSON** del backend (camelCase atteso).
+>>>>>>> 257993bf5bbcf0750e5d7fcb98bbf387ca1eaf88
 
 Già chiariti: tabella `LivelliSerbatoi` una riga al minuto (potrà variare); `DataOra` = ora locale del
-server SQL; eventi di allarme scritti dal backend.
+server SQL; eventi di allarme scritti dal backend; libreria S7netplus (già nel progetto); `Heartbeat` incrementato
+ogni 5 s (timeout 20 s = 4 incrementi mancati).
 
 Da chiudere con il softwarista PLC (documento "Punti aperti PLC – Supervisione serbatoi",
 https://claude.ai/code/artifact/9e2b08a4-2986-4d84-9e1e-e35eda396f5e):
@@ -1519,9 +1530,15 @@ Altri:
 ## 11. Checklist per chiudere il backend
 
 - [ ] Abilitare PUT/GET sul PLC 10.229.48.92 e verificare la porta 102 dal server del backend (§7.2)
+<<<<<<< HEAD
 - [ ] Creare `SupTankConfig` (con i valori iniziali) e `SupTankEvent` su `dana_verniciatura`: script in `Database/` (§7.12)
 - [ ] Creare l'indice su `DataOra` di `LivelliSerbatoi`; `HeartBeat` a `bigint` (`Database/LivelliSerbatoi.sql`, da concordare)
 - [x] Aggiungere DTO, classi, `TanksController`, registrazione e sezioni `TankPlc`/`Tanks` in `appsettings.json` (§7.12)
+=======
+- [ ] Creare `SupTankConfig` (con i valori iniziali) e `SupTankEvent` (§7.4, §7.5)
+- [ ] Creare l'indice su `DataOra` di `LivelliSerbatoi`; `HeartBeat` a `bigint` (§7.11, §5.2)
+- [ ] Aggiungere DTO, classi `ServiceBackend.Tanks`, `TanksController`, registrazione e sezioni `TankPlc`/`Tanks` in `appsettings.json` (§7.6–7.9)
+>>>>>>> 257993bf5bbcf0750e5d7fcb98bbf387ca1eaf88
 - [ ] Application pool sempre attivo, una sola istanza (§7.10)
 - [x] Verificare camelCase e date con fuso nelle risposte
 - [x] Provare ogni endpoint, poi con il frontend (`useMock: false`), con PLC simulato e database di prova
