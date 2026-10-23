@@ -268,7 +268,7 @@ di connessione.
 |---|---|---|---|
 | `LivelliSerbatoi` | System Platform | backend (trend) | `Database/LivelliSerbatoi.sql`: indice su `DataOra`, `HeartBeat` a `bigint`; da concordare |
 | `SupTankEvent` | backend | backend (allarmi) | `Database/SupTankEvent.sql` |
-| `SupTankConfig` | backend (pagina Configurazione) | backend | `Database/SupTankConfig.sql` |
+| `SupTankConfig` | backend (pagina Configurazione) | backend | `Database/SupTankConfig.sql`; per la tabella con la struttura precedente `SupTankConfig_migrazione_litri.sql` |
 
 Gli script non contengono `USE`: eseguirli con la finestra di SSMS collegata a
 `dana_verniciatura`. Si possono rieseguire senza danni: quello che esiste già non viene ricreato.
@@ -355,7 +355,7 @@ In `public/config.json`:
 | **Nuova variabile nel DB4** (in coda, da 56.0) | 1. `Db4Layout` (`Length` e `Parse`/`Encode`)<br>2. `PlcSnapshot` / `TankLive`<br>3. DTO in `TankDtos.cs` e nel frontend (`tank.models.ts`)<br>4. `MockTankApi` |
 | **Nuovo tipo di allarme** | 1. `AlarmKinds` e `TankMonitorService.ActiveKeys`/`Message`<br>2. vincolo `CK_SupTankEvent_Kind` della tabella<br>3. frontend: `AlarmKind`, `ALARM_LABELS`, `ALARM_SEVERITY` |
 | **Soglie lette dal PLC** (setpoint pieno/basso/minimo) | Leggerli in `Db4Layout` e usarli in `TankDal.Thresholds`. Le soglie basse sono già previste nel frontend (`lowWarningLiters`, `lowStopLiters`, oggi `null`) e compaiono appena hanno un valore. |
-| **Comandi verso il PLC** (tacitazione, travaso) | Serve prima l'autenticazione: Windows Authentication su IIS. La scrittura passa da una connessione S7 gestita dallo stesso servizio, non da una nuova per richiesta. La pagina Travaso è già nel menu, disattivata. |
+| **Comandi verso il PLC** (tacitazione, travaso) | Serve prima l'autenticazione: Windows Authentication su IIS. La scrittura passa da una connessione S7 gestita dallo stesso servizio, non da una nuova per richiesta. La rotta `/travaso` esiste già; la voce di menu è commentata in `layout/shell.ts`. |
 | **Trend comparato più veloce** | Endpoint che restituisce più serbatoi in una richiesta, al posto delle N richieste in parallelo. |
 
 ## 10. Limiti noti

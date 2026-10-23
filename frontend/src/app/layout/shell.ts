@@ -27,7 +27,7 @@ export class Shell {
     { label: 'Trend', path: '/trend' },
     { label: 'Allarmi', path: '/allarmi' },
     { label: 'Configurazione', path: '/configurazione' },
-    { label: 'Travaso', path: '/travaso', disabled: true },
+    // Travaso (/travaso, predisposizione): nascosto finché la funzione non c'è.
   ];
 
   protected readonly plcState = computed(() => {

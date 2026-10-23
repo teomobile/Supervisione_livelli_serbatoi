@@ -144,3 +144,4 @@ Vista Attivi: prima gli allarmi poi gli avvisi, durata che si aggiorna in tempo 
 Vista Storico: ordine cronologico, periodi predefiniti o intervallo libero. Filtri per serbatoio e
 tipo, export CSV. Il riconoscimento (ack) degli allarmi non è previsto: richiede autenticazione
 (per sapere chi ha riconosciuto) e, per tacitare le sirene, un comando di scrittura sul PLC.
+ng build --configuration=production  --output-hashing=all

@@ -169,7 +169,7 @@ Menu **Configurazione**. Per ogni serbatoio:
 PLC con la soglia scritta nel suo programma. Se si cambia qui senza cambiarla nel PLC, la linea non
 coincide più con l'avviso. Cambiare il troppo pieno cambia tutte le percentuali di quel serbatoio.
 
-La voce **Travaso** nel menu è disattivata: è prevista per una fase successiva (trasferimento
+La funzione **Travaso** non compare nel menu: è prevista per una fase successiva (trasferimento
 dell'olio da G-H ad A-B).
 
 ---

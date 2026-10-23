@@ -1279,7 +1279,7 @@ La cartella degli script si chiama `Database` e non `Sql` perché il `.gitignore
 Differenze rispetto alla bozza:
 
 - **PLC simulato** con `"TankPlc": { "Simulate": true }`, per lo sviluppo senza accesso al PLC:
-  - livelli sinusoidali, con F che supera il 95 %;
+  - livelli in litri, sinusoidali tra il 5 % e il 95 % del troppo pieno, con F che arriva al 104 %;
   - E con misura non valida dal minuto 10 al 12 di ogni ora;
   - D con guasto sensore nei primi 5 minuti di ogni mezz'ora;
   - heartbeat fermo nel minuto 50 di ogni ora.
@@ -1450,7 +1450,10 @@ Cosa è cambiato:
 | C, D | 7.500 l | 7.000 l |
 | E, F | 9.000 l | 8.500 l |
 
-Il frontend è già aggiornato (stesso contratto, `TankConfig` in litri). Nel **ServiceBackend**:
+Il frontend è già aggiornato (stesso contratto, `TankConfig` in litri). Il **ServiceBackend** è
+aggiornato come da tabella. La migrazione della tabella esistente è in
+`Database/SupTankConfig_migrazione_litri.sql`: trova da sola i nomi dei vincoli, mantiene i nomi dei
+serbatoi e si può rieseguire. È provata su una copia della struttura precedente. Modifiche nel ServiceBackend:
 
 | File | Modifica |
 |---|---|
@@ -1526,19 +1529,11 @@ Da chiarire per il backend:
    quando i dati di `LivelliSerbatoi` sono in litri (§7.13).
 1. **Accesso S7 al PLC 10.229.48.92**: PUT/GET abilitato sul 1214C; porta TCP 102 raggiungibile dal
    server del backend (firewall / reti separate).
-<<<<<<< HEAD
-2. **Ogni quanto il PLC incrementa `Heartbeat`**: determina `HeartbeatTimeoutSec` (oggi 20 s).
-3. **Application pool sempre attivo** su IIS, una sola istanza (§7.10).
-
-Chiusi: libreria S7 = S7netplus, già usata dal `PlcService`; JSON in camelCase (verificato).
-=======
 2. **Application pool sempre attivo** su IIS, una sola istanza (§7.10).
-3. **Casing del JSON** del backend (camelCase atteso).
->>>>>>> 257993bf5bbcf0750e5d7fcb98bbf387ca1eaf88
 
 Già chiariti: tabella `LivelliSerbatoi` una riga al minuto (potrà variare); `DataOra` = ora locale del
 server SQL; eventi di allarme scritti dal backend; libreria S7netplus (già nel progetto); `Heartbeat` incrementato
-ogni 5 s (timeout 20 s = 4 incrementi mancati).
+ogni 5 s (timeout 20 s = 4 incrementi mancati); JSON in camelCase (verificato).
 
 Da chiudere con il softwarista PLC (documento "Punti aperti PLC – Supervisione serbatoi",
 https://claude.ai/code/artifact/9e2b08a4-2986-4d84-9e1e-e35eda396f5e):
@@ -1597,15 +1592,11 @@ Altri:
 ## 11. Checklist per chiudere il backend
 
 - [ ] Abilitare PUT/GET sul PLC 10.229.48.92 e verificare la porta 102 dal server del backend (§7.2)
-<<<<<<< HEAD
-- [ ] Creare `SupTankConfig` (con i valori iniziali) e `SupTankEvent` su `dana_verniciatura`: script in `Database/` (§7.12)
+- [x] Creare `SupTankConfig` e `SupTankEvent` su `dana_verniciatura`: script in `Database/` (§7.12)
+- [ ] Migrare `SupTankConfig` ai litri: `Database/SupTankConfig_migrazione_litri.sql` (§7.13)
 - [ ] Creare l'indice su `DataOra` di `LivelliSerbatoi`; `HeartBeat` a `bigint` (`Database/LivelliSerbatoi.sql`, da concordare)
 - [x] Aggiungere DTO, classi, `TanksController`, registrazione e sezioni `TankPlc`/`Tanks` in `appsettings.json` (§7.12)
-=======
-- [ ] Creare `SupTankConfig` (con i valori iniziali) e `SupTankEvent` (§7.4, §7.5)
-- [ ] Creare l'indice su `DataOra` di `LivelliSerbatoi`; `HeartBeat` a `bigint` (§7.11, §5.2)
-- [ ] Aggiungere DTO, classi `ServiceBackend.Tanks`, `TanksController`, registrazione e sezioni `TankPlc`/`Tanks` in `appsettings.json` (§7.6–7.9)
->>>>>>> 257993bf5bbcf0750e5d7fcb98bbf387ca1eaf88
+- [x] Livello in litri e troppo pieno = 100 % nel ServiceBackend (§7.13)
 - [ ] Application pool sempre attivo, una sola istanza (§7.10)
 - [x] Verificare camelCase e date con fuso nelle risposte
 - [x] Provare ogni endpoint, poi con il frontend (`useMock: false`), con PLC simulato e database di prova
