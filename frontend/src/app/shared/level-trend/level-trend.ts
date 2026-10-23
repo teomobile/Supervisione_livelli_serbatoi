@@ -63,7 +63,8 @@ export class LevelTrend {
       yAxis: {
         type: 'value',
         min: 0,
-        max: h?.capacityLiters,
+        // Fino al troppo pieno (100 %), o oltre se il livello lo supera.
+        max: (v: { max: number }) => Math.max(v.max, h?.capacityLiters ?? 0),
         name: 'litri',
         nameTextStyle: { color: '#5b5b57' },
         axisLabel: { color: '#5b5b57', formatter: (v: number) => fmtLiters.format(v) },

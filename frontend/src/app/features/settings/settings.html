@@ -4,9 +4,9 @@
   </div>
 
   <div class="notice">
-    Le percentuali di <b>pieno</b> e <b>troppo pieno</b> servono solo a disegnare le linee sul supervisore.
-    Il segnale di pieno lo decide il PLC con la soglia scritta nel programma: se la cambi qui, va cambiata anche
-    nel PLC. Il troppo pieno corrisponde alla quota di montaggio del sensore.
+    Il <b>troppo pieno</b> è il livello massimo del serbatoio e vale il <b>100 %</b>: le percentuali mostrate dal
+    supervisore sono calcolate su questo valore. Il <b>pieno</b> serve a disegnare la linea; il segnale di pieno lo
+    decide il PLC con la soglia scritta nel programma: se la cambi qui, va cambiata anche nel PLC.
   </div>
 
   @if (loading()) {
@@ -17,54 +17,6 @@
       <p-button label="Riprova" size="small" [outlined]="true" (onClick)="load()" />
     </div>
   } @else {
-    <section class="panel">
-      <div class="panel-header">
-        <span>Valori per tutti i serbatoi</span>
-      </div>
-      <div class="bulk">
-        <label>
-          <span>Capacità (l)</span>
-          <p-inputnumber
-            [ngModel]="bulk().capacityLiters"
-            (ngModelChange)="setBulk('capacityLiters', $event)"
-            [min]="limits.capacityMin"
-            [max]="limits.capacityMax"
-            locale="it-IT"
-            size="small"
-            inputStyleClass="num-input"
-          />
-        </label>
-        <label>
-          <span>Soglia pieno (%)</span>
-          <p-inputnumber
-            [ngModel]="bulk().fullPercent"
-            (ngModelChange)="setBulk('fullPercent', $event)"
-            [min]="0"
-            [max]="100"
-            [maxFractionDigits]="1"
-            locale="it-IT"
-            size="small"
-            inputStyleClass="num-input"
-          />
-        </label>
-        <label>
-          <span>Troppo pieno (%)</span>
-          <p-inputnumber
-            [ngModel]="bulk().tooFullPercent"
-            (ngModelChange)="setBulk('tooFullPercent', $event)"
-            [min]="0"
-            [max]="100"
-            [maxFractionDigits]="1"
-            locale="it-IT"
-            size="small"
-            inputStyleClass="num-input"
-          />
-        </label>
-        <p-button label="Applica a tutti" size="small" [outlined]="true" (onClick)="applyBulk()" />
-        <span class="hint">Riempie la tabella sotto; le modifiche diventano effettive solo con Salva.</span>
-      </div>
-    </section>
-
     <section class="panel table-panel">
       <div class="panel-header">
         <span>Serbatoi</span>
@@ -90,9 +42,8 @@
             <tr>
               <th style="width: 60px">Serb.</th>
               <th style="width: 340px">Nome</th>
-              <th style="width: 170px">Capacità (l)</th>
-              <th style="width: 200px">Soglia pieno (%)</th>
-              <th style="width: 200px">Troppo pieno (%)</th>
+              <th style="width: 200px">Troppo pieno = 100 % (l)</th>
+              <th style="width: 240px">Soglia pieno (l)</th>
               <th style="width: 150px">Ultima modifica</th>
             </tr>
           </ng-template>
@@ -112,46 +63,29 @@
               </td>
               <td>
                 <p-inputnumber
-                  [ngModel]="row.capacityLiters"
-                  (ngModelChange)="setField(row.code, 'capacityLiters', $event)"
+                  [ngModel]="row.tooFullLiters"
+                  (ngModelChange)="setField(row.code, 'tooFullLiters', $event)"
                   [min]="0"
-                  [max]="limits.capacityMax"
+                  [max]="limits.litersMax"
                   locale="it-IT"
                   size="small"
                   inputStyleClass="num-input"
-                  [class.field-changed]="isChanged(row.code, 'capacityLiters')"
+                  [class.field-changed]="isChanged(row.code, 'tooFullLiters')"
                 />
               </td>
               <td>
                 <div class="pct-cell">
                   <p-inputnumber
-                    [ngModel]="row.fullPercent"
-                    (ngModelChange)="setField(row.code, 'fullPercent', $event)"
+                    [ngModel]="row.fullLiters"
+                    (ngModelChange)="setField(row.code, 'fullLiters', $event)"
                     [min]="0"
-                    [max]="100"
-                    [maxFractionDigits]="1"
+                    [max]="limits.litersMax"
                     locale="it-IT"
                     size="small"
-                    inputStyleClass="num-input pct-input"
-                    [class.field-changed]="isChanged(row.code, 'fullPercent')"
+                    inputStyleClass="num-input"
+                    [class.field-changed]="isChanged(row.code, 'fullLiters')"
                   />
-                  <span class="liters num">{{ liters(row, row.fullPercent) | number: '1.0-0' }} l</span>
-                </div>
-              </td>
-              <td>
-                <div class="pct-cell">
-                  <p-inputnumber
-                    [ngModel]="row.tooFullPercent"
-                    (ngModelChange)="setField(row.code, 'tooFullPercent', $event)"
-                    [min]="0"
-                    [max]="100"
-                    [maxFractionDigits]="1"
-                    locale="it-IT"
-                    size="small"
-                    inputStyleClass="num-input pct-input"
-                    [class.field-changed]="isChanged(row.code, 'tooFullPercent')"
-                  />
-                  <span class="liters num">{{ liters(row, row.tooFullPercent) | number: '1.0-0' }} l</span>
+                  <span class="liters num">{{ fullPercent(row) !== null ? (fullPercent(row) | number: '1.1-1') + ' %' : '' }}</span>
                 </div>
               </td>
               <td class="num muted">{{ row.updatedAt ? (row.updatedAt | date: 'dd/MM/yy HH:mm') : '—' }}</td>
@@ -159,7 +93,7 @@
             @if (errors().get(row.code)?.length) {
               <tr class="error-row">
                 <td></td>
-                <td colspan="5">{{ errors().get(row.code)!.join(' · ') }}</td>
+                <td colspan="4">{{ errors().get(row.code)!.join(' · ') }}</td>
               </tr>
             }
           </ng-template>

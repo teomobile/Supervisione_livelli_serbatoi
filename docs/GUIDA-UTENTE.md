@@ -58,13 +58,13 @@ della zona. Per ogni serbatoio:
 
 - **il disegno del serbatoio**, riempito in proporzione al livello, con due linee:
   - **Pieno**, arancio: la soglia di pieno;
-  - **Max**, rossa: la quota del sensore di troppo pieno;
-- **il livello in litri**, grande, e **la percentuale**;
+  - **Max**, rossa: il troppo pieno, in cima al serbatoio (100 %);
+- **il livello in litri**, grande, e **la percentuale** rispetto al troppo pieno;
 - a destra:
 
 | Campo | Significato |
 |---|---|
-| Capacità | Litri del serbatoio pieno al 100 % |
+| Troppo pieno | Livello massimo del serbatoio in litri: corrisponde al 100 % |
 | Radar | **OK**, oppure **Non valida** se la misura del radar non è affidabile |
 | Pieno | **Sì** / **No**, secondo la soglia impostata nel PLC |
 | Sensore max | **OK**, **Intervenuto** (troppo pieno) oppure **Guasto** |
@@ -156,21 +156,18 @@ Menu **Configurazione**. Per ogni serbatoio:
 | Campo | Uso |
 |---|---|
 | Nome | Come compare in tutte le pagine (es. "Produzione A"), massimo 30 caratteri |
-| Capacità (l) | Serve a trasformare la percentuale del radar in litri |
-| Soglia pieno (%) | Dove disegnare la linea "Pieno" |
-| Troppo pieno (%) | Dove disegnare la linea "Max" (quota del sensore) |
+| Troppo pieno = 100 % (l) | Livello massimo del serbatoio: le percentuali sono calcolate su questo valore |
+| Soglia pieno (l) | Dove disegnare la linea "Pieno"; accanto compare la sua percentuale |
 | Ultima modifica | Quando la riga è stata salvata l'ultima volta |
 
 - Le modifiche restano **in bozza** (campi evidenziati) finché non si preme **Salva**, che chiede
   conferma. **Annulla modifiche** torna ai valori salvati.
-- **Applica a tutti** copia gli stessi valori su tutti i serbatoi.
 - Uscendo dalla pagina con modifiche non salvate compare un avviso.
 - Le modifiche valgono subito per tutte le postazioni.
 
-**Attenzione.** Le percentuali di pieno e troppo pieno servono **solo a disegnare le linee**.
-L'avviso "Pieno" lo decide il PLC con la soglia scritta nel suo programma, e il troppo pieno
-dipende dall'altezza a cui è montato il sensore. Se si cambia la percentuale qui senza cambiarla
-nel PLC, la linea non coincide più con l'avviso.
+**Attenzione.** La soglia di pieno serve **solo a disegnare la linea**: l'avviso "Pieno" lo decide il
+PLC con la soglia scritta nel suo programma. Se si cambia qui senza cambiarla nel PLC, la linea non
+coincide più con l'avviso. Cambiare il troppo pieno cambia tutte le percentuali di quel serbatoio.
 
 La voce **Travaso** nel menu è disattivata: è prevista per una fase successiva (trasferimento
 dell'olio da G-H ad A-B).

@@ -24,9 +24,11 @@ export interface TankStatus {
   code: TankCode;
   name: string;
   zone: ZoneCode;
+  /** Riferimento del 100 %: il livello di troppo pieno del serbatoio. */
   capacityLiters: number;
-  /** null quando la misura non è disponibile. */
+  /** Livello / troppo pieno × 100; null quando la misura non è disponibile. */
   levelPercent: number | null;
+  /** Livello letto dal PLC, già in litri. */
   levelLiters: number | null;
   /** X_LevelValid */
   levelValid: boolean;
@@ -71,6 +73,7 @@ export interface LevelSample {
 
 export interface TankHistory {
   code: TankCode;
+  /** Riferimento del 100 % (troppo pieno). */
   capacityLiters: number;
   thresholds: TankThresholds;
   samples: LevelSample[];

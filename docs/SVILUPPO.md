@@ -115,7 +115,7 @@ Mappa dei byte (big-endian; il bit x.0 è il meno significativo):
 | 0–1 | `DataVersion` UInt |
 | 2 bit 0 | `PLCReady` |
 | 4–7 | `Heartbeat` UDInt |
-| 8 + 6·i … +3 | `X_LevelPercent` Real (i = 0 per A … 7 per H) |
+| 8 + 6·i … +3 | `X_LevelPercent` Real, **in litri** dal 23/10/2026 (i = 0 per A … 7 per H) |
 | 12 + 6·i bit 0/1/2/3 | `X_LevelValid` / `X_Full` / `X_TooFull` / `X_TooFullFault` |
 | 54 bit 4/5/6/7 | `Horn_AB` / `Horn_CD` / `Horn_EF` / `Horn_GH` |
 
@@ -163,16 +163,19 @@ A–H già validata.
 
 ### 3.4 Configurazione
 
-`SupTankConfig` contiene nome, capacità, percentuale di pieno e di troppo pieno: dati che il PLC
+`SupTankConfig` contiene nome, troppo pieno (= 100 %) e soglia di pieno, in litri: dati che il PLC
 non ha e che si modificano dalla pagina Configurazione. Sta in una tabella, e non in
 `appsettings.json`, perché un'applicazione web non deve riscrivere il proprio file di
 configurazione, e i valori devono sopravvivere alle pubblicazioni.
 
-- Le percentuali servono **solo a disegnare le linee**: gli eventi li decide il PLC con i bit.
+- Il livello arriva in litri dal PLC; la percentuale è livello / troppo pieno × 100 e può superare 100.
+- Le soglie servono a disegnare le linee: gli eventi li decide il PLC con i bit.
+- Il passaggio da percentuale a litri del 23/10/2026 è descritto in `HANDOFF-backend.md` §7.13.
 - `SaveTankConfig` ripete le validazioni del frontend, aggiorna solo le righe ricevute in una
   transazione (inserisce quelle mancanti) e restituisce le 8 righe.
 - `TankDal` tiene la configurazione in cache per 30 s; la cache si svuota al salvataggio.
-- Se la tabella non è leggibile, stato e trend usano i valori predefiniti (10.000 l, 85 %, 95 %)
+- Se la tabella non è leggibile, stato e trend usano i valori predefiniti per serbatoio (A, B, G, H
+  9.500/8.700 l; C, D 7.500/7.000 l; E, F 9.000/8.500 l)
   e si riprova dopo un minuto. Così il sinottico resta disponibile.
 
 ### 3.5 Risposte
@@ -284,7 +287,7 @@ Swagger su `/swagger`.
 
 - **Senza accesso al PLC**: `"Simulate": true`. Il simulatore produce i 55 byte, quindi passa da
   `Db4Layout.Parse` come i dati veri:
-  - livelli sinusoidali, con F che supera il 95 %;
+  - livelli sinusoidali in litri, con F che supera il troppo pieno;
   - E con misura non valida dal minuto 10 al 12 di ogni ora;
   - D con guasto sensore nei primi 5 minuti di ogni mezz'ora;
   - heartbeat fermo nel minuto 50 di ogni ora.

@@ -14,20 +14,24 @@ import {
 import { TankConfig } from '../models/tank-config';
 import { AlarmQuery, TankApi } from './tank-api';
 
-/** Valori iniziali come da specifica: 10.000 l, pieno 85 %, troppo pieno 95 %. */
+/** Valori iniziali per serbatoio, in litri: troppo pieno (= 100 %) e soglia di pieno. */
+const DEFAULT_LIMITS: Record<TankCode, { tooFull: number; full: number }> = {
+  A: { tooFull: 9500, full: 8700 }, B: { tooFull: 9500, full: 8700 },
+  C: { tooFull: 7500, full: 7000 }, D: { tooFull: 7500, full: 7000 },
+  E: { tooFull: 9000, full: 8500 }, F: { tooFull: 9000, full: 8500 },
+  G: { tooFull: 9500, full: 8700 }, H: { tooFull: 9500, full: 8700 },
+};
+
 function defaultConfig(code: TankCode): TankConfig {
-  return { code, name: `Serbatoio ${code}`, capacityLiters: 10_000, fullPercent: 85, tooFullPercent: 95, updatedAt: null };
+  const l = DEFAULT_LIMITS[code];
+  return { code, name: `Serbatoio ${code}`, tooFullLiters: l.tooFull, fullLiters: l.full, updatedAt: null };
 }
 
 function thresholdsOf(c: TankConfig): TankThresholds {
   // Il DB4 non ha soglie di livello basso: restano null.
-  return {
-    fillLiters: (c.capacityLiters * c.fullPercent) / 100,
-    tooFullLiters: (c.capacityLiters * c.tooFullPercent) / 100,
-    lowWarningLiters: null,
-    lowStopLiters: null,
-  };
+  return { fillLiters: c.fullLiters, tooFullLiters: c.tooFullLiters, lowWarningLiters: null, lowStopLiters: null };
 }
+
 const HOUR_MS = 3_600_000;
 const INVALID_WINDOW_MS = 25 * 60_000;
 
@@ -38,14 +42,14 @@ interface Profile {
   phase: number;
 }
 
-/** Andamenti simulati in decimi di punto percentuale (10.000 = 100 %): ogni serbatoio ha uno scenario diverso. */
+/** Andamenti simulati in centesimi di punto rispetto al troppo pieno (10.000 = 100 %): ogni serbatoio ha uno scenario diverso. */
 const PROFILES: Record<TankCode, Profile> = {
   A: { base: 6000, amplitude: 2500, periodHours: 20, phase: 0.3 },
   B: { base: 5500, amplitude: 3000, periodHours: 26, phase: 1.7 },
   C: { base: 2900, amplitude: 1200, periodHours: 14, phase: 2.2 },
   D: { base: 7000, amplitude: 1000, periodHours: 30, phase: 0.9 },
   E: { base: 5000, amplitude: 2000, periodHours: 18, phase: 3.1 }, // misura radar non valida negli ultimi minuti
-  F: { base: 9150, amplitude: 400, periodHours: 6, phase: 0.0 }, // vicino al massimo
+  F: { base: 9700, amplitude: 400, periodHours: 6, phase: 0.0 }, // vicino al massimo
   G: { base: 7500, amplitude: 1500, periodHours: 48, phase: 1.1 },
   H: { base: 800, amplitude: 300, periodHours: 10, phase: 2.6 }, // sotto il minimo
 };
@@ -63,7 +67,8 @@ function percentAt(code: TankCode, t: number): number {
   const p = PROFILES[code];
   const angle = (t / (p.periodHours * HOUR_MS)) * 2 * Math.PI + p.phase;
   const value = p.base + p.amplitude * Math.sin(angle) + noise(t / 60_000 + code.charCodeAt(0)) * 60;
-  return Math.min(100, Math.max(0, value / 100));
+  // Il radar può leggere poco oltre il troppo pieno: fino al 103 %.
+  return Math.min(103, Math.max(0, value / 100));
 }
 
 function isInvalidAt(code: TankCode, t: number, now: number): boolean {
@@ -113,11 +118,11 @@ export class MockTankApi extends TankApi {
       const pct = invalid ? null : percentAt(code, t);
       samples.push({
         timestamp: new Date(t).toISOString(),
-        levelLiters: pct === null ? null : round1((pct * cfg.capacityLiters) / 100),
+        levelLiters: pct === null ? null : Math.round((pct * cfg.tooFullLiters) / 100),
         levelPercent: pct === null ? null : round1(pct),
       });
     }
-    return of<TankHistory>({ code, capacityLiters: cfg.capacityLiters, thresholds: thresholdsOf(cfg), samples }).pipe(delay(250));
+    return of<TankHistory>({ code, capacityLiters: cfg.tooFullLiters, thresholds: thresholdsOf(cfg), samples }).pipe(delay(250));
   }
 
   getAlarms(query: AlarmQuery): Observable<AlarmEvent[]> {
@@ -170,13 +175,13 @@ export class MockTankApi extends TankApi {
       code,
       name: cfg.name,
       zone: ZONE_OF[code],
-      capacityLiters: cfg.capacityLiters,
+      capacityLiters: cfg.tooFullLiters,
       levelPercent: pct === null ? null : round1(pct),
-      levelLiters: pct === null ? null : round1((pct * cfg.capacityLiters) / 100),
+      levelLiters: pct === null ? null : Math.round((pct * cfg.tooFullLiters) / 100),
       levelValid: !invalid,
       // Simulazione dei bit PLC: in realtà X_Full usa la soglia del programma, X_TooFull il sensore.
-      full: pct !== null && pct >= cfg.fullPercent,
-      tooFull: pct !== null && pct >= cfg.tooFullPercent,
+      full: pct !== null && (pct * cfg.tooFullLiters) / 100 >= cfg.fullLiters,
+      tooFull: pct !== null && pct >= 100,
       tooFullFault: false,
       thresholds: thresholdsOf(cfg),
       timestamp: new Date(now - 2000).toISOString(),

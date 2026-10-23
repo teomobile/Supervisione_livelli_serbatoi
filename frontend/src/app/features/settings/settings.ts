@@ -12,9 +12,9 @@ import { CONFIG_LIMITS, TankConfig, validateTankConfig } from '../../core/models
 import { TankCode } from '../../core/models/tank.models';
 import { HasUnsavedChanges } from './unsaved-changes.guard';
 
-type EditableField = 'name' | 'capacityLiters' | 'fullPercent' | 'tooFullPercent';
+type EditableField = 'name' | 'tooFullLiters' | 'fullLiters';
 
-const EDITABLE: EditableField[] = ['name', 'capacityLiters', 'fullPercent', 'tooFullPercent'];
+const EDITABLE: EditableField[] = ['name', 'tooFullLiters', 'fullLiters'];
 
 @Component({
   selector: 'app-settings',
@@ -38,9 +38,6 @@ export class Settings implements HasUnsavedChanges {
   protected readonly loadError = signal(false);
   protected readonly saveError = signal<string | null>(null);
   protected readonly savedAt = signal<Date | null>(null);
-
-  /** Valori della riga "tutti i serbatoi", applicati solo alla bozza. */
-  protected readonly bulk = signal({ capacityLiters: 10_000, fullPercent: 85, tooFullPercent: 95 });
 
   protected readonly errors = computed(() => {
     const map = new Map<TankCode, string[]>();
@@ -93,16 +90,6 @@ export class Settings implements HasUnsavedChanges {
     this.savedAt.set(null);
   }
 
-  protected setBulk(field: 'capacityLiters' | 'fullPercent' | 'tooFullPercent', value: number): void {
-    this.bulk.update((b) => ({ ...b, [field]: value }));
-  }
-
-  protected applyBulk(): void {
-    const b = this.bulk();
-    this.draft.update((rows) => rows.map((r) => ({ ...r, ...b })));
-    this.savedAt.set(null);
-  }
-
   protected discard(): void {
     this.draft.set(this.saved().map((r) => ({ ...r })));
     this.saveError.set(null);
@@ -115,13 +102,14 @@ export class Settings implements HasUnsavedChanges {
     return field ? before[field] !== after[field] : EDITABLE.some((f) => before[f] !== after[f]);
   }
 
-  protected liters(row: TankConfig, percent: number | null): number | null {
-    return percent === null || !row.capacityLiters ? null : (row.capacityLiters * percent) / 100;
+  /** Soglia di pieno in % del troppo pieno (che vale 100 %). */
+  protected fullPercent(row: TankConfig): number | null {
+    return row.fullLiters && row.tooFullLiters ? (row.fullLiters / row.tooFullLiters) * 100 : null;
   }
 
   protected askSave(): void {
     const codes = this.changedCodes();
-    const fullChanged = codes.some((c) => this.isChanged(c, 'fullPercent'));
+    const fullChanged = codes.some((c) => this.isChanged(c, 'fullLiters'));
     this.confirm.confirm({
       header: 'Salvare la configurazione?',
       message:

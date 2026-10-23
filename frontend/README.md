@@ -90,7 +90,7 @@ I tipi sono definiti in `src/app/core/models/tank.models.ts`. Corrispondenza con
 | DB4 | Campo DTO |
 |---|---|
 | `PLCReady`, `Heartbeat`, `DataVersion` | `SystemStatus.plc` |
-| `X_LevelPercent` | `TankStatus.levelPercent` (litri calcolati dal backend con la capacità) |
+| `X_LevelPercent` (in **litri** dal 23/10/2026) | `TankStatus.levelLiters`; `levelPercent` = litri / troppo pieno × 100 |
 | `X_LevelValid` | `levelValid` |
 | `X_Full` | `full` |
 | `X_TooFull` | `tooFull` |
@@ -101,7 +101,8 @@ Il backend legge questi valori **direttamente dal PLC 10.229.48.92 via S7** (sta
 di allarme, che registra nella tabella `SupTankEvent`); la tabella `dana_verniciatura.dbo.LivelliSerbatoi`,
 scritta da System Platform una volta al minuto, serve solo per i trend. Dettagli in `docs/HANDOFF-backend.md`.
 
-La capacità non è nel DB4: la fornisce il backend da configurazione (oggi 10.000 l per serbatoio).
+Il troppo pieno (= 100 %) e la soglia di pieno non sono nel DB4: li fornisce il backend da configurazione
+(`SupTankConfig`, in litri). `capacityLiters` nei DTO è il troppo pieno.
 
 Le soglie (`thresholds`) sono tutte facoltative (`null`). Il DB4 espone solo i bit
 `X_Full`/`X_TooFull`/`X_TooFullFault`, non i valori: il colore del serbatoio dipende solo da questi bit
@@ -109,7 +110,7 @@ e dalla validità della misura. I valori di `fillLiters` (soglia di pieno del PL
 (quota del sensore di troppo pieno) li fornisce il backend dalla propria configurazione e servono solo
 a disegnare le linee. Linee, righe e allarmi di livello basso/minimo compaiono solo se il valore c'è.
 
-**Attenzione:** le percentuali di pieno e troppo pieno in configurazione servono solo al disegno.
+**Attenzione:** la soglia di pieno in configurazione serve solo al disegno.
 L'evento `X_Full` lo decide il PLC con la soglia scritta nel programma Step 7: se si cambia da una
 parte va cambiata anche dall'altra, altrimenti la linea non corrisponde più all'evento.
 
@@ -122,8 +123,7 @@ tutti i serbatoi selezionati. Il trend usa `GetTankHistory` una volta per serbat
 
 ## Configurazione
 
-Pagina `/configurazione`: nome, capacità, soglia di pieno e quota del troppo pieno per serbatoio, più una
-riga per applicare gli stessi valori a tutti. Le modifiche restano in bozza (campi evidenziati) finché
+Pagina `/configurazione`: nome, troppo pieno (= 100 %) e soglia di pieno per serbatoio, in litri. Le modifiche restano in bozza (campi evidenziati) finché
 non si preme Salva; il salvataggio chiede conferma e, se cambia la soglia di pieno, ricorda di
 cambiarla anche nel PLC. Uscendo dalla pagina con modifiche non salvate compare un avviso.
 

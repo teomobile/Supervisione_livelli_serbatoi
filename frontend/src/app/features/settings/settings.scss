@@ -15,27 +15,6 @@
   color: var(--hmi-text-muted);
 }
 
-.bulk {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 10px 16px;
-  padding: 10px 12px;
-
-  label {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    font-size: 12px;
-    color: var(--hmi-text-muted);
-  }
-
-  .hint {
-    font-size: 12px;
-    color: var(--hmi-text-muted);
-  }
-}
-
 .table-panel {
   margin-top: 12px;
 }

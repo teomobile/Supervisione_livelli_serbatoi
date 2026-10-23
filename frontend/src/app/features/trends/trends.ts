@@ -193,7 +193,7 @@ export class Trends {
       yAxis: {
         type: 'value',
         min: 0,
-        max: liters ? maxCapacity || undefined : 100,
+        max: (v: { max: number }) => Math.max(v.max, liters ? maxCapacity : 100),
         name: liters ? 'litri' : '%',
         nameTextStyle: { color: '#5b5b57' },
         axisLabel: { color: '#5b5b57', formatter: (v: number) => (liters ? fmtLiters.format(v) : String(v)) },

@@ -180,7 +180,8 @@ interface TankThresholds {          // litri; null = non disponibile
   lowStopLiters: number | null;     // oggi sempre null (non nel DB4)
 }
 interface TankStatus {
-  code: TankCode; name: string; zone: ZoneCode; capacityLiters: number;
+  code: TankCode; name: string; zone: ZoneCode;
+  capacityLiters: number;           // riferimento del 100 % = troppo pieno del serbatoio
   levelPercent: number | null; levelLiters: number | null;   // null se misura non disponibile
   levelValid: boolean; full: boolean; tooFull: boolean; tooFullFault: boolean;
   thresholds: TankThresholds;
@@ -197,16 +198,20 @@ type AlarmKind = 'TOO_FULL'|'FULL'|'TOO_FULL_FAULT'|'LEVEL_INVALID'|'LOW_WARNING
 interface AlarmEvent { id: number; kind: AlarmKind; tankCode: TankCode | null; message: string;
                        raisedAt: string; clearedAt: string | null; }   // clearedAt null = attivo
 
-interface TankConfig { code: TankCode; name: string; capacityLiters: number;
-                       fullPercent: number; tooFullPercent: number; updatedAt: string | null; }
+interface TankConfig { code: TankCode; name: string;
+                       tooFullLiters: number;    // troppo pieno = 100 %
+                       fullLiters: number;       // soglia di pieno
+                       updatedAt: string | null; }
 ```
 
 Dettagli che contano:
 
 - `heartbeatChangedAt` + `serverTime`: il frontend calcola l'età dell'heartbeat **sull'ora del
   server** (non del PC client). Oltre `heartbeatTimeoutSec` (20 s) mostra "Com. persa".
-- `levelLiters = levelPercent × capacityLiters / 100`, capacità dalla configurazione.
-- `thresholds.fillLiters = capacity × fullPercent / 100`; `tooFullLiters = capacity × tooFullPercent / 100`.
+- Il PLC fornisce il livello **già in litri** (dal 23/10/2026): `levelLiters` = valore letto;
+  `levelPercent = levelLiters / tooFullLiters × 100` (il troppo pieno vale 100 %; può superare 100).
+- `capacityLiters` = `tooFullLiters` della configurazione; `thresholds.tooFullLiters` = stesso valore;
+  `thresholds.fillLiters` = `fullLiters`.
 - Storico: circa **600 punti** per intervallo (il frontend non ricampiona). Campioni con misura non
   valida → `levelLiters`/`levelPercent` null (il grafico interrompe la linea).
 - `name` del `TankStatus` = nome dalla configurazione (default "Serbatoio X").
@@ -231,6 +236,9 @@ DB **non ottimizzato** (offset assoluti), `DataVersion` UInt a 0.0.
 | G | 44.0 / 48.0–48.3 | | idem |
 | H | 50.0 / 54.0–54.3 | | idem |
 | 54.4 / 54.5 / 54.6 / 54.7 | `Horn_AB`, `Horn_CD`, `Horn_EF`, `Horn_GH` | Bool | `horns[]` |
+
+**Dal 23/10/2026 il valore `X_LevelPercent` è in litri** (nome e offset invariati, da confermare: se la
+variabile viene rinominata nel DB4 cambia solo il nome, non la lettura).
 
 Nel DB4 **non ci sono**: valori di soglia, livello basso/minimo, comandi (tacitazione, travaso),
 stato "Rabbocco" (presente nel vecchio supervisore per il serbatoio A).
@@ -276,9 +284,9 @@ L'`ALTER TABLE` su `HeartBeat` evita che l'inserimento di System Platform fallis
 
 | Tema | Decisione |
 |---|---|
-| Capacità | 10.000 l per serbatoio, cilindro verticale, parametrizzabile per serbatoio |
-| Soglia pieno | 85 % per tutti, parametrizzabile (solo per il disegno; l'evento lo decide il PLC) |
-| Troppo pieno | 95 % per tutti, parametrizzabile (quota del sensore) |
+| Livello | in **litri** dal PLC (dal 23/10/2026); la % è calcolata sul troppo pieno |
+| Troppo pieno = 100 % | A, B, G, H 9.500 l · C, D 7.500 l · E, F 9.000 l; modificabile da Configurazione |
+| Soglia pieno | A, B, G, H 8.700 l · C, D 7.000 l · E, F 8.500 l; solo per il disegno (l'evento lo decide il PLC) |
 | Soglie basse | rimandate: richiedono modifiche al PLC |
 | Modifiche al PLC | rimandate; elenco dei punti aperti preparato per il softwarista (§9) |
 | Dove salvare la configurazione | **tabella SQL** (non `appsettings.json`, che un'API non deve riscrivere); `appsettings.json` solo per i valori iniziali |
@@ -389,27 +397,25 @@ USE [dana_verniciatura];
 GO
 
 CREATE TABLE dbo.SupTankConfig (
-    Code            CHAR(1)       NOT NULL PRIMARY KEY,
-    Name            NVARCHAR(30)  NOT NULL,
-    CapacityLiters  FLOAT         NOT NULL,
-    FullPercent     FLOAT         NOT NULL,
-    TooFullPercent  FLOAT         NOT NULL,
-    UpdatedAt       DATETIME2     NULL,       -- UTC
-    CONSTRAINT CK_SupTankConfig_Code     CHECK (Code IN ('A','B','C','D','E','F','G','H')),
-    CONSTRAINT CK_SupTankConfig_Capacity CHECK (CapacityLiters BETWEEN 100 AND 100000),
-    CONSTRAINT CK_SupTankConfig_Percent  CHECK (FullPercent > 0 AND TooFullPercent <= 100
-                                                AND FullPercent < TooFullPercent)
+    Code           CHAR(1)       NOT NULL PRIMARY KEY,
+    Name           NVARCHAR(30)  NOT NULL,
+    TooFullLiters  FLOAT         NOT NULL,   -- troppo pieno = 100 %
+    FullLiters     FLOAT         NOT NULL,   -- soglia di pieno
+    UpdatedAt      DATETIME2     NULL,       -- UTC
+    CONSTRAINT CK_SupTankConfig_Code    CHECK (Code IN ('A','B','C','D','E','F','G','H')),
+    CONSTRAINT CK_SupTankConfig_TooFull CHECK (TooFullLiters BETWEEN 100 AND 100000),
+    CONSTRAINT CK_SupTankConfig_Full    CHECK (FullLiters > 0 AND FullLiters < TooFullLiters)
 );
 
-INSERT INTO dbo.SupTankConfig (Code, Name, CapacityLiters, FullPercent, TooFullPercent)
-VALUES ('A','Serbatoio A',10000,85,95), ('B','Serbatoio B',10000,85,95),
-       ('C','Serbatoio C',10000,85,95), ('D','Serbatoio D',10000,85,95),
-       ('E','Serbatoio E',10000,85,95), ('F','Serbatoio F',10000,85,95),
-       ('G','Serbatoio G',10000,85,95), ('H','Serbatoio H',10000,85,95);
+INSERT INTO dbo.SupTankConfig (Code, Name, TooFullLiters, FullLiters)
+VALUES ('A','Serbatoio A',9500,8700), ('B','Serbatoio B',9500,8700),
+       ('C','Serbatoio C',7500,7000), ('D','Serbatoio D',7500,7000),
+       ('E','Serbatoio E',9000,8500), ('F','Serbatoio F',9000,8500),
+       ('G','Serbatoio G',9500,8700), ('H','Serbatoio H',9500,8700);
 ```
 
 `SaveTankConfig` deve ripetere lato server le stesse validazioni del frontend (nome 1–30 caratteri,
-capacità 100–100.000 l, 0 < pieno < troppo pieno ≤ 100), aggiornare solo le righe ricevute in una
+troppo pieno 100–100.000 l, 0 < pieno < troppo pieno), aggiornare solo le righe ricevute in una
 transazione, impostare `UpdatedAt = SYSUTCDATETIME()` e restituire tutte le 8 righe.
 
 ### 7.5 Tabella degli eventi
@@ -530,9 +536,8 @@ namespace ServiceBackend.Model.Tanks
     {
         public string Code { get; set; } = "";
         public string Name { get; set; } = "";
-        public double CapacityLiters { get; set; }
-        public double FullPercent { get; set; }
-        public double TooFullPercent { get; set; }
+        public double TooFullLiters { get; set; }   // troppo pieno = 100 %
+        public double FullLiters { get; set; }      // soglia di pieno
         public DateTimeOffset? UpdatedAt { get; set; }
     }
 }
@@ -622,6 +627,9 @@ Nota: `GetAlarms` con `activeOnly=true` e nessun allarme deve restituire `ListIt
 `StatusCode = 200` (non 204/null): il frontend lo legge come "nessun allarme attivo".
 
 ### 7.8 Codice di accesso (bozza)
+
+> Bozza scritta prima dell'implementazione: il codice reale è nel ServiceBackend (§7.12). Per il
+> passaggio ai litri del 23/10/2026 valgono le modifiche di §7.13, non questa bozza.
 
 Cinque classi nuove, nessuna modifica a `PlcService` e `DAL`:
 
@@ -1426,6 +1434,63 @@ I requisiti di storicizzazione (heartbeat e bit registrati a ogni cambio, deadba
 livello) valgono anche per la frequenza di scrittura della tabella LivelliSerbatoi.
 -->
 
+### 7.13 Modifica del 23/10/2026: livello in litri, troppo pieno = 100 %
+
+Cosa è cambiato:
+
+- il PLC fornisce il livello **già in litri** nella stessa variabile `X_LevelPercent` (Real, stesso
+  offset); System Platform scrive lo stesso valore in `LivelliSerbatoi.X_LevelPercent`;
+- il **troppo pieno è il livello massimo** del serbatoio e vale **100 %**: non c'è più una capacità
+  separata;
+- valori iniziali:
+
+| Serbatoio | Troppo pieno = 100 % | Pieno |
+|---|---|---|
+| A, B, G, H | 9.500 l | 8.700 l |
+| C, D | 7.500 l | 7.000 l |
+| E, F | 9.000 l | 8.500 l |
+
+Il frontend è già aggiornato (stesso contratto, `TankConfig` in litri). Nel **ServiceBackend**:
+
+| File | Modifica |
+|---|---|
+| `TankDtos.cs` | `TankConfigDto`: togliere `CapacityLiters`, `FullPercent`, `TooFullPercent`; aggiungere `TooFullLiters`, `FullLiters` |
+| `Db4Layout.cs` | il Real a `8 + 6·i` è in litri: rinominare il campo (es. `LevelLiters`); `Encode` del simulatore in litri |
+| `TankPlcReader.cs` (simulatore) | livelli in litri rispetto al troppo pieno di ogni serbatoio; F deve superare il proprio troppo pieno (9.000 l) per provare l'allarme |
+| `TankDal.cs`, stato | `LevelLiters` = valore letto (arrotondato all'unità); `LevelPercent` = litri / `TooFullLiters` × 100, **senza limite a 100**; `CapacityLiters` = `TooFullLiters` |
+| `TankDal.cs`, soglie | `FillLiters` = `FullLiters`; `TooFullLiters` = `TooFullLiters` |
+| `TankDal.cs`, trend | `AVG(... X_LevelPercent ...)` è ora una media di **litri**: `LevelLiters` = media, `LevelPercent` = media / `TooFullLiters` × 100 |
+| `TankDal.cs`, configurazione | lettura/salvataggio delle nuove colonne; valori predefiniti per serbatoio (tabella sopra) al posto di 10.000 l / 85 % / 95 % |
+| `TankDal.Validate` | troppo pieno 100–100.000 l; 0 < pieno < troppo pieno |
+| `Database/SupTankConfig.sql` | nuova struttura (§7.4) |
+
+Migrazione della tabella esistente (i nomi dei vincoli vanno controllati nel database: se sono
+diversi da quelli di §7.4, usare quelli reali):
+
+```sql
+USE [dana_verniciatura];
+GO
+ALTER TABLE dbo.SupTankConfig ADD TooFullLiters FLOAT NULL, FullLiters FLOAT NULL;
+GO
+UPDATE dbo.SupTankConfig SET TooFullLiters = 9500, FullLiters = 8700 WHERE Code IN ('A','B','G','H');
+UPDATE dbo.SupTankConfig SET TooFullLiters = 7500, FullLiters = 7000 WHERE Code IN ('C','D');
+UPDATE dbo.SupTankConfig SET TooFullLiters = 9000, FullLiters = 8500 WHERE Code IN ('E','F');
+GO
+ALTER TABLE dbo.SupTankConfig ALTER COLUMN TooFullLiters FLOAT NOT NULL;
+ALTER TABLE dbo.SupTankConfig ALTER COLUMN FullLiters FLOAT NOT NULL;
+ALTER TABLE dbo.SupTankConfig DROP CONSTRAINT CK_SupTankConfig_Capacity, CK_SupTankConfig_Percent;
+ALTER TABLE dbo.SupTankConfig DROP COLUMN CapacityLiters, FullPercent, TooFullPercent;
+ALTER TABLE dbo.SupTankConfig ADD
+    CONSTRAINT CK_SupTankConfig_TooFull CHECK (TooFullLiters BETWEEN 100 AND 100000),
+    CONSTRAINT CK_SupTankConfig_Full    CHECK (FullLiters > 0 AND FullLiters < TooFullLiters);
+GO
+```
+
+**Storico precedente:** le righe di `LivelliSerbatoi` scritte prima del cambio nel PLC contengono
+percentuali, non litri. Nel trend compariranno come valori tra 0 e 100 "litri". Se il periodo serve,
+va convertito una volta (percentuale × capacità di allora / 100) fino all'ora del cambio; altrimenti
+quei dati vanno ignorati.
+
 ## 8. Backend esistente: cosa sappiamo e cosa è stato proposto
 
 Fatti (dal codice condiviso):
@@ -1457,6 +1522,8 @@ Queste modifiche sono **fuori dal perimetro serbatoi**: riguardano il backend OE
 
 Da chiarire per il backend:
 
+0. **Livello in litri**: confermare che nel DB4 il nome resta `X_LevelPercent` e l'offset non cambia, e da
+   quando i dati di `LivelliSerbatoi` sono in litri (§7.13).
 1. **Accesso S7 al PLC 10.229.48.92**: PUT/GET abilitato sul 1214C; porta TCP 102 raggiungibile dal
    server del backend (firewall / reti separate).
 <<<<<<< HEAD
