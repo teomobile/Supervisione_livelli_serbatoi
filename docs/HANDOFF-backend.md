@@ -237,8 +237,7 @@ DB **non ottimizzato** (offset assoluti), `DataVersion` UInt a 0.0.
 | H | 50.0 / 54.0–54.3 | | idem |
 | 54.4 / 54.5 / 54.6 / 54.7 | `Horn_AB`, `Horn_CD`, `Horn_EF`, `Horn_GH` | Bool | `horns[]` |
 
-**Dal 23/10/2026 il valore `X_LevelPercent` è in litri** (nome e offset invariati, da confermare: se la
-variabile viene rinominata nel DB4 cambia solo il nome, non la lettura).
+**Dal 23/10/2026 il valore `X_LevelPercent` è in litri** (nome e offset invariati, confermato).
 
 Nel DB4 **non ci sono**: valori di soglia, livello basso/minimo, comandi (tacitazione, travaso),
 stato "Rabbocco" (presente nel vecchio supervisore per il serbatoio A).
@@ -1486,10 +1485,8 @@ ALTER TABLE dbo.SupTankConfig ADD
 GO
 ```
 
-**Storico precedente:** le righe di `LivelliSerbatoi` scritte prima del cambio nel PLC contengono
-percentuali, non litri. Nel trend compariranno come valori tra 0 e 100 "litri". Se il periodo serve,
-va convertito una volta (percentuale × capacità di allora / 100) fino all'ora del cambio; altrimenti
-quei dati vanno ignorati.
+**Storico precedente:** le righe di `LivelliSerbatoi` scritte in percentuale sono state cancellate:
+la tabella contiene solo litri.
 
 ## 8. Backend esistente: cosa sappiamo e cosa è stato proposto
 
@@ -1522,8 +1519,6 @@ Queste modifiche sono **fuori dal perimetro serbatoi**: riguardano il backend OE
 
 Da chiarire per il backend:
 
-0. **Livello in litri**: confermare che nel DB4 il nome resta `X_LevelPercent` e l'offset non cambia, e da
-   quando i dati di `LivelliSerbatoi` sono in litri (§7.13).
 1. **Accesso S7 al PLC 10.229.48.92**: PUT/GET abilitato sul 1214C; porta TCP 102 raggiungibile dal
    server del backend (firewall / reti separate).
 <<<<<<< HEAD
