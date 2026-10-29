@@ -49,7 +49,7 @@ export class Trends {
   ];
 
   /** Default: produzione (A-B) e stoccaggio (G-H), i serbatoi coinvolti nel travaso. */
-  protected readonly selected = signal<TankCode[]>(['A', 'B', 'G', 'H']);
+  protected readonly selected = signal<TankCode[]>(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
   protected readonly unit = signal<Unit>('liters');
   protected readonly period = signal<PeriodKey>('24h');
   protected readonly customRange = signal<Date[] | null>(null);
